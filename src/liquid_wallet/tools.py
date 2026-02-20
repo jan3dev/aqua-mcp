@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from .assets import resolve_asset_name
 from .wallet import WalletManager
 
 
@@ -234,10 +235,12 @@ def lw_send_asset(
     """
     manager = get_manager()
     txid = manager.send(wallet_name, address, amount, asset_id, passphrase)
+    ticker = resolve_asset_name(asset_id)
     return {
         "txid": txid,
         "amount": amount,
         "asset_id": asset_id,
+        "ticker": ticker,
         "address": address,
     }
 
