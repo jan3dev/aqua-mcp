@@ -1,9 +1,24 @@
 """MCP tool definitions for Liquid Wallet."""
 
+import json
+import re
+import urllib.request
+import urllib.error
 from typing import Any
 
 from .assets import resolve_asset_name
 from .wallet import WalletManager
+
+
+ESPLORA_URLS = {
+    "mainnet": "https://blockstream.info/liquid/api",
+    "testnet": "https://blockstream.info/liquidtestnet/api",
+}
+
+EXPLORER_URLS = {
+    "mainnet": "https://blockstream.info/liquid/tx",
+    "testnet": "https://blockstream.info/liquidtestnet/tx",
+}
 
 
 # Global wallet manager instance
@@ -245,6 +260,89 @@ def lw_send_asset(
     }
 
 
+def _parse_tx_input(tx_input: str) -> tuple[str, str]:
+    """Parse a txid or Blockstream URL into (txid, network)."""
+    # Try to match a Blockstream URL
+    match = re.match(
+        r"https?://blockstream\.info/(liquidtestnet|liquid)/tx/([0-9a-fA-F]{64})",
+        tx_input.strip(),
+    )
+    if match:
+        network = "testnet" if match.group(1) == "liquidtestnet" else "mainnet"
+        return match.group(2), network
+
+    # Try raw txid
+    txid = tx_input.strip()
+    if re.fullmatch(r"[0-9a-fA-F]{64}", txid):
+        return txid, "mainnet"
+
+    raise ValueError(f"Invalid input: expected a 64-char hex txid or a Blockstream URL, got: {tx_input}")
+
+
+def lw_tx_status(tx: str) -> dict[str, Any]:
+    """
+    Get the status of a Liquid transaction.
+
+    Accepts a txid or a Blockstream explorer URL, e.g.:
+    https://blockstream.info/liquid/tx/9763a7...
+
+    Args:
+        tx: Transaction ID (hex) or Blockstream URL
+
+    Returns:
+        txid, status (confirmed/unconfirmed), block_height, fee, amounts, explorer_url
+    """
+    txid, network = _parse_tx_input(tx)
+    api_url = f"{ESPLORA_URLS[network]}/tx/{txid}"
+
+    req = urllib.request.Request(api_url, headers={"User-Agent": "mcp-liquid-wallet"})
+    try:
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            data = json.loads(resp.read().decode())
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            raise ValueError(f"Transaction not found: {txid}")
+        raise ValueError(f"Blockstream API error: HTTP {e.code}")
+    except urllib.error.URLError as e:
+        raise ValueError(f"Could not reach Blockstream API: {e.reason}")
+
+    status = data.get("status", {})
+    confirmed = status.get("confirmed", False)
+    block_height = status.get("block_height")
+    block_time = status.get("block_time")
+    fee = data.get("fee")
+
+    # Summarize outputs with asset info
+    outputs = []
+    for vout in data.get("vout", []):
+        entry = {}
+        if vout.get("scriptpubkey_address"):
+            entry["address"] = vout["scriptpubkey_address"]
+        if vout.get("value") is not None:
+            entry["value"] = vout["value"]
+        if vout.get("asset"):
+            asset_id = vout["asset"]
+            entry["asset_id"] = asset_id
+            entry["ticker"] = resolve_asset_name(asset_id)
+        if entry:
+            outputs.append(entry)
+
+    result = {
+        "txid": txid,
+        "network": network,
+        "status": "confirmed" if confirmed else "unconfirmed",
+        "fee": fee,
+        "outputs": outputs,
+        "explorer_url": f"{EXPLORER_URLS[network]}/{txid}",
+    }
+    if confirmed:
+        result["block_height"] = block_height
+        if block_time:
+            result["block_time"] = block_time
+
+    return result
+
+
 def lw_list_wallets() -> dict[str, Any]:
     """
     List all wallets.
@@ -272,5 +370,6 @@ TOOLS = {
     "lw_transactions": lw_transactions,
     "lw_send": lw_send,
     "lw_send_asset": lw_send_asset,
+    "lw_tx_status": lw_tx_status,
     "lw_list_wallets": lw_list_wallets,
 }

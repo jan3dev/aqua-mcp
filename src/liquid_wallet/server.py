@@ -202,6 +202,19 @@ TOOL_SCHEMAS = {
             "required": ["wallet_name", "address", "amount", "asset_id"],
         },
     },
+    "lw_tx_status": {
+        "description": "Get the status of a Liquid transaction. Accepts a txid or a Blockstream explorer URL (e.g. https://blockstream.info/liquid/tx/abc123...)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "tx": {
+                    "type": "string",
+                    "description": "Transaction ID (64-char hex) or Blockstream explorer URL",
+                },
+            },
+            "required": ["tx"],
+        },
+    },
     "lw_list_wallets": {
         "description": "List all wallets",
         "inputSchema": {
