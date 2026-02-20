@@ -15,44 +15,41 @@ MCP server for managing Liquid Network wallets through AI assistants like Claude
 ### Prerequisites
 
 - Python 3.10+
-- pip
+- [uv](https://docs.astral.sh/uv/) (recommended) or pip
 
-### Install from source
-
-```bash
-git clone https://github.com/YOUR_USERNAME/liquid-wallet.git
-cd liquid-wallet
-pip install -e .
-```
-
-### Install dependencies only
+### Clone and install
 
 ```bash
-pip install lwk mcp cryptography
+git clone https://github.com/andycreed0x/mcp-liquid-wallet.git
+cd mcp-liquid-wallet
+uv sync
 ```
+
+This creates a virtual environment and installs all dependencies.
 
 ## Quick Start
 
 ### 1. Run the MCP server
 
 ```bash
-# Start the server
-python -m liquid_wallet.server
+# Using uv
+uv run python -m liquid_wallet.server
 
-# Or with uvx (if published)
-uvx liquid-wallet
+# Or activate venv first
+source .venv/bin/activate
+python -m liquid_wallet.server
 ```
 
 ### 2. Configure your MCP client
 
-Add to your MCP client configuration (e.g., Claude Desktop):
+Add to your MCP client configuration (e.g., Claude Desktop `~/.claude/claude_desktop_config.json`):
 
 ```json
 {
   "mcpServers": {
     "liquid-wallet": {
-      "command": "python",
-      "args": ["-m", "liquid_wallet.server"]
+      "command": "uv",
+      "args": ["run", "--directory", "/path/to/mcp-liquid-wallet", "python", "-m", "liquid_wallet.server"]
     }
   }
 }
@@ -67,7 +64,7 @@ Once connected, you can ask Claude to:
 - "Generate a new receive address"
 - "Send 0.001 L-BTC to lq1..."
 
-## Usage
+## Usage Examples
 
 ### Create a New Wallet
 
@@ -121,8 +118,7 @@ Fee: 250 sats
 | `lw_send` | Send L-BTC |
 | `lw_send_asset` | Send any Liquid asset |
 | `lw_transactions` | Transaction history |
-| `lw_utxos` | List UTXOs |
-| `lw_assets` | List wallet assets |
+| `lw_list_wallets` | List all wallets |
 
 ## Configuration
 
@@ -163,15 +159,15 @@ All private key operations happen locally. Only blockchain sync uses Blockstream
 ## Development
 
 ```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+# Install with dev dependencies
+uv sync --dev
 
 # Run tests
-pytest
+uv run pytest
 
 # Format code
-black src/
-ruff check src/
+uv run black src/
+uv run ruff check src/
 ```
 
 ## Architecture
