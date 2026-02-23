@@ -133,7 +133,10 @@ class Storage:
 
     def list_wallets(self) -> list[str]:
         """List all wallet names."""
-        return [p.stem for p in self.wallets_dir.glob("*.json")]
+        return [
+            p.stem for p in self.wallets_dir.glob("*.json")
+            if re.fullmatch(r'[a-zA-Z0-9_-]{1,64}', p.stem)
+        ]
 
     def load_wallet(self, name: str) -> Optional[WalletData]:
         """Load wallet data."""
@@ -164,5 +167,5 @@ class Storage:
         """Get cache directory for wallet."""
         _validate_wallet_name(wallet_name)
         cache_path = self.cache_dir / wallet_name
-        cache_path.mkdir(exist_ok=True)
+        cache_path.mkdir(exist_ok=True, mode=0o700)
         return cache_path

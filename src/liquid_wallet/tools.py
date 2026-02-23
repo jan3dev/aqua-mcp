@@ -343,8 +343,9 @@ def lw_tx_status(tx: str) -> dict[str, Any]:
             with urllib.request.urlopen(tip_req, timeout=15) as resp:
                 tip_height = int(resp.read().decode().strip())
             result["confirmations"] = tip_height - block_height + 1
-        except Exception:
+        except Exception as e:
             result["confirmations"] = None
+            result["warning"] = f"Could not fetch current block height to calculate confirmations: {e}"
     else:
         result["confirmations"] = 0
 
