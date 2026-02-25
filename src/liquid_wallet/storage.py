@@ -74,8 +74,11 @@ class Storage:
     def _ensure_dirs(self):
         """Create necessary directories with restricted permissions."""
         self.base_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        os.chmod(self.base_dir, 0o700)
         self.wallets_dir.mkdir(exist_ok=True, mode=0o700)
+        os.chmod(self.wallets_dir, 0o700)
         self.cache_dir.mkdir(exist_ok=True, mode=0o700)
+        os.chmod(self.cache_dir, 0o700)
 
     def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
         """Derive encryption key from passphrase."""
