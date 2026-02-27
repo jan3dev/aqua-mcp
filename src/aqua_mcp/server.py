@@ -215,6 +215,96 @@ TOOL_SCHEMAS = {
             "properties": {},
         },
     },
+    "btc_balance": {
+        "description": "Get Bitcoin wallet balance in satoshis",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "wallet_name": {
+                    "type": "string",
+                    "description": "Name of the wallet",
+                    "default": "default",
+                },
+            },
+        },
+    },
+    "btc_address": {
+        "description": "Generate a Bitcoin receive address (bc1...)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "wallet_name": {
+                    "type": "string",
+                    "description": "Name of the wallet",
+                    "default": "default",
+                },
+                "index": {
+                    "type": "integer",
+                    "description": "Specific address index (optional)",
+                },
+            },
+        },
+    },
+    "btc_transactions": {
+        "description": "Get Bitcoin transaction history",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "wallet_name": {
+                    "type": "string",
+                    "description": "Name of the wallet",
+                    "default": "default",
+                },
+                "limit": {
+                    "type": "integer",
+                    "description": "Maximum number of transactions",
+                    "default": 10,
+                },
+            },
+        },
+    },
+    "btc_send": {
+        "description": "Send BTC to an address",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "wallet_name": {
+                    "type": "string",
+                    "description": "Name of the wallet",
+                },
+                "address": {
+                    "type": "string",
+                    "description": "Destination Bitcoin address (bc1...)",
+                },
+                "amount": {
+                    "type": "integer",
+                    "description": "Amount in satoshis",
+                },
+                "fee_rate": {
+                    "type": "integer",
+                    "description": "Optional fee rate in sat/vB",
+                },
+                "passphrase": {
+                    "type": "string",
+                    "description": "Passphrase to decrypt mnemonic (if encrypted)",
+                },
+            },
+            "required": ["wallet_name", "address", "amount"],
+        },
+    },
+    "unified_balance": {
+        "description": "Get balance for both Bitcoin and Liquid networks (unified wallet)",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "wallet_name": {
+                    "type": "string",
+                    "description": "Name of the wallet",
+                    "default": "default",
+                },
+            },
+        },
+    },
 }
 
 

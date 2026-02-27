@@ -22,7 +22,9 @@ class WalletData:
     """Wallet data structure."""
     name: str
     network: str  # "mainnet" or "testnet"
-    descriptor: str  # CT descriptor
+    descriptor: str  # CT descriptor (Liquid)
+    btc_descriptor: Optional[str] = None  # BIP84 external descriptor (Bitcoin)
+    btc_change_descriptor: Optional[str] = None  # BIP84 change descriptor (Bitcoin)
     encrypted_mnemonic: Optional[str] = None  # Encrypted, if full wallet
     watch_only: bool = False
     created_at: str = field(default_factory=lambda: datetime.utcnow().isoformat())
@@ -32,6 +34,10 @@ class WalletData:
 
     @classmethod
     def from_dict(cls, data: dict) -> "WalletData":
+        # Backward compatibility: old wallet files may not have btc_* fields
+        data = {**data}
+        data.setdefault("btc_descriptor", None)
+        data.setdefault("btc_change_descriptor", None)
         return cls(**data)
 
 

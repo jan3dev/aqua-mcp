@@ -37,8 +37,10 @@ def isolated_manager():
         storage = Storage(Path(tmpdir))
         manager = WalletManager(storage=storage)
         tools_module._manager = manager
+        tools_module._btc_manager = None  # so get_btc_manager() uses same storage
         yield manager
         tools_module._manager = None
+        tools_module._btc_manager = None
 
 
 # ---------------------------------------------------------------------------
@@ -669,6 +671,11 @@ class TestToolRegistry:
             "lw_send_asset",
             "lw_list_wallets",
             "lw_tx_status",
+            "btc_balance",
+            "btc_address",
+            "btc_transactions",
+            "btc_send",
+            "unified_balance",
         }
         assert set(TOOLS.keys()) == expected
 
