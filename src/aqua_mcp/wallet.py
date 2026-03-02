@@ -277,7 +277,6 @@ class WalletManager:
 
         self.sync_wallet(wallet_name)
         wollet = self._get_wollet(wallet_name)
-        policy_asset = self._get_policy_asset(wallet.network)
 
         txs = wollet.transactions()
         if limit:
@@ -295,7 +294,7 @@ class WalletManager:
                 height=tx.height(),
                 timestamp=tx.timestamp(),
                 balance=balance,
-                fee=tx.fee(policy_asset) or 0,
+                fee=tx.fee() or 0,
             ))
 
         return result
