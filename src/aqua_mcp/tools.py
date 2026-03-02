@@ -232,6 +232,8 @@ def lw_send(
         amount: Amount sent
         address: Destination address
     """
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
     manager = get_manager()
     txid = manager.send(wallet_name, address, amount, passphrase=passphrase)
     return {
@@ -264,6 +266,8 @@ def lw_send_asset(
         asset_id: Asset sent
         address: Destination address
     """
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
     manager = get_manager()
     txid = manager.send(wallet_name, address, amount, asset_id, passphrase)
     ticker = resolve_asset_name(asset_id)
@@ -464,6 +468,10 @@ def btc_send(
         amount: Amount sent
         address: Destination address
     """
+    if amount <= 0:
+        raise ValueError("Amount must be positive")
+    if fee_rate is not None and fee_rate <= 0:
+        raise ValueError("Fee rate must be positive")
     btc = get_btc_manager()
     txid = btc.send(wallet_name, address, amount, fee_rate, passphrase)
     return {

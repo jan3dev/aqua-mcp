@@ -316,6 +316,9 @@ class WalletManager:
         if wallet.watch_only:
             raise ValueError("Cannot sign with watch-only wallet")
 
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+
         if wallet_name not in self._signers:
             if not wallet.encrypted_mnemonic:
                 raise ValueError("No mnemonic available for signing")

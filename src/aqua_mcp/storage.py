@@ -3,6 +3,7 @@
 import json
 import os
 import re
+import shutil
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from pathlib import Path
@@ -221,12 +222,16 @@ class Storage:
             raise
 
     def delete_wallet(self, name: str) -> bool:
-        """Delete wallet."""
+        """Delete wallet and its cache directory."""
         path = self._wallet_path(name)
-        if path.exists():
-            path.unlink()
-            return True
-        return False
+        if not path.exists():
+            return False
+        path.unlink()
+        _validate_wallet_name(name)
+        cache_path = self.cache_dir / name
+        if cache_path.is_dir():
+            shutil.rmtree(cache_path)
+        return True
 
     # Cache operations
 

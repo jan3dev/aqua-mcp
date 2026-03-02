@@ -286,6 +286,10 @@ class BitcoinWalletManager:
             raise ValueError(f"Wallet '{wallet_name}' not found")
         if wallet_data.watch_only:
             raise ValueError("Cannot sign with watch-only wallet")
+        if amount <= 0:
+            raise ValueError("Amount must be positive")
+        if fee_rate is not None and fee_rate <= 0:
+            raise ValueError("Fee rate must be positive")
         if not wallet_data.encrypted_mnemonic:
             raise ValueError(
                 "No mnemonic available for signing (import wallet with mnemonic to enable sending)"
