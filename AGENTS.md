@@ -16,7 +16,7 @@ AI Assistant ←→ MCP Server (Python) ←→ LWK (Liquid) ──→ Electrum/E
 
 No local server required. Liquid uses Electrum/Esplora; Bitcoin uses Esplora only. All via Blockstream's public infrastructure.
 
-## Tools
+## Tools (16 total)
 
 Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix.
 
@@ -28,6 +28,7 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix.
 | `lw_import_mnemonic` | Import wallet from mnemonic; also creates Bitcoin wallet from same mnemonic (unified) | `mnemonic`: string, `wallet_name`: optional, `network`: mainnet/testnet, `passphrase`: optional |
 | `lw_export_descriptor` | Export CT descriptor (watch-only) | `wallet_name`: optional |
 | `lw_import_descriptor` | Import watch-only wallet from CT descriptor | `descriptor`: string, `wallet_name`: string, `network`: optional |
+| `lw_list_wallets` | List all wallets | (none) |
 
 ### Wallet Operations (Liquid)
 
@@ -35,16 +36,15 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix.
 |------|-------------|------------|
 | `lw_balance` | Get wallet balance (all assets) | `wallet_name`: optional |
 | `lw_address` | Generate new receive address | `wallet_name`: optional, `index`: optional |
-| `lw_transactions` | List transaction history | `wallet_name`: optional, `limit`: optional |
-| `lw_list_wallets` | List all wallets | (none) |
+| `lw_transactions` | List transaction history | `wallet_name`: optional, `limit`: optional (default: 10) |
 
 ### Transactions (Liquid)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `lw_send` | Create, sign and broadcast L-BTC transaction | `wallet_name`, `address`, `amount` (sats), `passphrase`: optional |
-| `lw_send_asset` | Send a specific Liquid asset | `wallet_name`, `address`, `amount`, `asset_id`, `passphrase`: optional |
-| `lw_tx_status` | Get transaction status (txid or Blockstream URL) | `tx`: string |
+| `lw_send_asset` | Send a specific Liquid asset | `wallet_name`, `address`, `amount` (sats), `asset_id`, `passphrase`: optional |
+| `lw_tx_status` | Get transaction status (txid or Blockstream URL) | `tx`: string (64-char hex txid or blockstream.info URL) |
 
 ### Bitcoin (btc_*)
 
@@ -52,14 +52,43 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix.
 |------|-------------|------------|
 | `btc_balance` | Get Bitcoin wallet balance in satoshis | `wallet_name`: optional |
 | `btc_address` | Generate Bitcoin receive address (bc1...) | `wallet_name`: optional, `index`: optional |
-| `btc_transactions` | List Bitcoin transaction history | `wallet_name`: optional, `limit`: optional |
-| `btc_send` | Send BTC to an address | `wallet_name`, `address`, `amount` (sats), `fee_rate`: optional, `passphrase`: optional |
+| `btc_transactions` | List Bitcoin transaction history | `wallet_name`: optional, `limit`: optional (default: 10) |
+| `btc_send` | Send BTC to an address | `wallet_name`, `address`, `amount` (sats), `fee_rate`: optional (sat/vB), `passphrase`: optional |
 
 ### Unified
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `unified_balance` | Get balance for both Bitcoin and Liquid | `wallet_name`: optional |
+
+## Resources (3 total)
+
+MCP resources provide static documentation to AI assistants.
+
+| URI | Name | Description |
+|-----|------|-------------|
+| `aqua://docs/quickstart` | Quick Start Guide | Creating wallets, checking balance, receiving/sending funds |
+| `aqua://docs/networks` | Network Reference | Bitcoin and Liquid network details, address formats, explorers, common assets |
+| `aqua://docs/security` | Security Best Practices | Passphrase usage, encryption, backup, watch-only wallets, recovery |
+
+## Prompts (12 total)
+
+MCP prompts provide pre-built conversation starters for common workflows.
+
+| Prompt | Description | Arguments |
+|--------|-------------|-----------|
+| `create_new_wallet` | Create a new wallet with mnemonic and passphrase | `wallet_name`: optional, `network`: optional |
+| `import_seed` | Import an existing wallet from a mnemonic | `wallet_name`: optional |
+| `show_balance` | Show wallet balance (both networks by default) | `wallet_name`: optional |
+| `bitcoin_balance` | Show only Bitcoin balance | `wallet_name`: optional |
+| `liquid_balance` | Show only Liquid balance (all assets) | `wallet_name`: optional |
+| `generate_address` | Generate an address to receive funds | `network`: required (bitcoin/liquid), `wallet_name`: optional |
+| `show_transactions` | View transaction history | `network`: optional (bitcoin/liquid), `wallet_name`: optional |
+| `send_bitcoin` | Send Bitcoin to an address | `wallet_name`: optional |
+| `send_liquid` | Send L-BTC or other Liquid asset | `wallet_name`: optional |
+| `transaction_status` | Check transaction status | `network`: optional (bitcoin/liquid) |
+| `list_wallets` | Show all wallets | (none) |
+| `export_descriptor` | Export descriptor for watch-only wallet | `wallet_name`: optional |
 
 ## Data Storage
 
@@ -70,7 +99,10 @@ Wallet data stored in `~/.aqua-mcp/`:
 ├── wallets/
 │   ├── default.json     # Encrypted wallet data
 │   └── work.json
-└── cache/               # Blockchain sync cache
+└── cache/
+    └── <wallet_name>/
+        └── btc/
+            └── bdk.sqlite  # BDK persistence (Bitcoin)
 ```
 
 ### Wallet File Structure
@@ -90,12 +122,25 @@ Wallet data stored in `~/.aqua-mcp/`:
 
 `btc_descriptor` and `btc_change_descriptor` (BIP84) are set when the wallet is imported from mnemonic (unified wallet). Omitted for watch-only or descriptor-only imports.
 
+### Config Structure
+
+```json
+{
+  "network": "mainnet",
+  "default_wallet": "default",
+  "electrum_url": null,
+  "auto_sync": true
+}
+```
+
 ## Security Considerations
 
-1. **Mnemonic Storage**: Mnemonics are encrypted at rest using a passphrase
+1. **Mnemonic Storage**: Mnemonics are encrypted at rest using PBKDF2 (480k iterations) + Fernet. Stored as `plain:b64` (no passphrase) or encrypted string
 2. **Watch-Only Mode**: Supports CT descriptors for balance checking without signing capability
 3. **No Server**: All operations are local + public Electrum/Esplora servers
 4. **Network Isolation**: Mainnet/testnet wallets are kept separate
+5. **File Permissions**: Wallet directory created with `0o700`, files with `0o600`
+6. **Atomic Writes**: Wallet files written via temp files to prevent corruption
 
 ## Networks
 
@@ -118,7 +163,31 @@ Wallet data stored in `~/.aqua-mcp/`:
 - `lwk` - Liquid Wallet Kit Python bindings
 - `bdkpython` - Bitcoin Development Kit Python bindings (>=2.2.0)
 - `mcp` - Model Context Protocol SDK
-- `cryptography` - For mnemonic encryption
+- `cryptography` - For mnemonic encryption (PBKDF2 + Fernet)
+
+## Bitcoin Implementation Details
+
+### BDK Constants
+
+| Constant | Value | Purpose |
+|----------|-------|---------|
+| `STOP_GAP` | 50 | Max consecutive unused addresses to scan before stopping |
+| `PARALLEL_REQUESTS` | 5 | Concurrent Esplora API requests during full_scan |
+
+### BDK Send Flow
+
+1. **Validate** amount > 0, fee_rate > 0 (if provided), wallet has mnemonic
+2. **Decrypt** mnemonic using passphrase (if encrypted)
+3. **Load** wallet with signing capability (`_get_wallet_with_signer`)
+4. **Sync** wallet via Esplora `full_scan` to get latest UTXOs
+5. **Build** PSBT with `TxBuilder`, set recipient and optional fee rate
+6. **Sign** with `trust_witness_utxo=True`, `try_finalize=True`
+7. **Broadcast** via Esplora client
+8. **Return** txid in display format (big-endian, matching block explorers)
+
+### TXID Format
+
+Transaction IDs are returned in **big-endian display format** (byte-reversed hex), matching what block explorers show. BDK internally uses little-endian.
 
 ## Error Handling
 
@@ -136,6 +205,8 @@ All tools return structured errors:
   }
 }
 ```
+
+Common error codes: `ValueError`, `INSUFFICIENT_FUNDS`, `Generic`.
 
 ## Example Flows
 
@@ -179,6 +250,16 @@ All tools return structured errors:
    → { "balances": [...] }
 ```
 
+### Check Transaction Status
+
+```
+1. lw_tx_status(tx="abc123...")
+   → { "txid": "abc123...", "status": "confirmed", "confirmations": 5, "explorer_url": "https://..." }
+
+2. lw_tx_status(tx="https://blockstream.info/liquid/tx/abc123...")
+   → { "txid": "abc123...", "network": "mainnet", "status": "unconfirmed", ... }
+```
+
 ## Development
 
 ### Project Structure
@@ -191,12 +272,12 @@ aqua-mcp/
 ├── src/
 │   └── aqua_mcp/
 │       ├── __init__.py
-│       ├── server.py   # MCP server entry point
-│       ├── tools.py    # Tool implementations
+│       ├── server.py   # MCP server entry point (tools, resources, prompts)
+│       ├── tools.py    # Tool implementations (lw_*, btc_*, unified_*)
 │       ├── wallet.py   # Liquid wallet (LWK)
 │       ├── bitcoin.py  # Bitcoin wallet (BDK)
 │       ├── assets.py   # Asset registry
-│       └── storage.py  # Persistence layer
+│       └── storage.py  # Persistence layer (encryption, config, wallet data)
 └── tests/
     ├── test_tools.py
     ├── test_storage.py
@@ -219,4 +300,4 @@ uv run python -m aqua_mcp.server
 
 ---
 
-*Last updated: 2026-02-26*
+*Last updated: 2026-03-03*
