@@ -83,6 +83,7 @@ class BitcoinWalletManager:
         self.storage = storage or Storage()
         self._wallets: dict[str, bdk.Wallet] = {}
         self._persisters: dict[str, bdk.Persister] = {}
+        self._networks: dict[str, str] = {}
         self._clients: dict[str, bdk.EsploraClient] = {}
 
     def _get_esplora_url(self, network: str) -> str:
@@ -129,6 +130,7 @@ class BitcoinWalletManager:
 
         self._wallets[wallet_name] = wallet
         self._persisters[wallet_name] = persister
+        self._networks[wallet_name] = network
 
         wallet_data.btc_descriptor = str(external_desc)
         wallet_data.btc_change_descriptor = str(change_desc)
@@ -142,10 +144,8 @@ class BitcoinWalletManager:
         passphrase: Optional[str] = None,
     ) -> tuple[bdk.Wallet, str]:
         """Get or create BDK wallet. Returns (Wallet, network)."""
-        if wallet_name in self._wallets:
-            wallet_data = self.storage.load_wallet(wallet_name)
-            if wallet_data:
-                return self._wallets[wallet_name], wallet_data.network
+        if wallet_name in self._wallets and wallet_name in self._networks:
+            return self._wallets[wallet_name], self._networks[wallet_name]
 
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
@@ -173,6 +173,7 @@ class BitcoinWalletManager:
         )
         self._wallets[wallet_name] = wallet
         self._persisters[wallet_name] = persister
+        self._networks[wallet_name] = wallet_data.network
         return wallet, wallet_data.network
 
     def _get_wallet_with_signer(
@@ -204,6 +205,7 @@ class BitcoinWalletManager:
         )
         self._wallets[wallet_name] = wallet
         self._persisters[wallet_name] = persister
+        self._networks[wallet_name] = wallet_data.network
         return wallet, wallet_data.network
 
     def sync_wallet(self, wallet_name: str) -> None:
