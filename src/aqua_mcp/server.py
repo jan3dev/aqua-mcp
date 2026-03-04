@@ -13,6 +13,7 @@ from mcp.types import (
     Prompt,
     PromptMessage,
     PromptArgument,
+    GetPromptResult,
     Resource,
     ResourceTemplate,
 )
@@ -467,14 +468,14 @@ PASSPHRASE HANDLING:
         ]
 
     @server.get_prompt()
-    async def get_prompt(name: str, arguments: dict[str, str] | None) -> PromptMessage:
+    async def get_prompt(name: str, arguments: dict[str, str] | None) -> GetPromptResult:
         """Get a specific prompt template."""
         wallet_name = arguments.get("wallet_name", "default") if arguments else "default"
         network = arguments.get("network", "mainnet") if arguments else "mainnet"
 
         # Wallet creation
         if name == "create_new_wallet":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -496,10 +497,10 @@ Please:
 7. Remind me to backup the mnemonic (and passphrase if used) securely
 8. Generate a receive address for Bitcoin and another for Liquid""",
                 ),
-            )
+            )])
 
         elif name == "import_seed":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -515,11 +516,11 @@ Please ask me:
 
 Then import and confirm that both Bitcoin and Liquid wallets were created.""",
                 ),
-            )
+            )])
 
         # Balance queries
         elif name == "show_balance":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -530,10 +531,10 @@ Use unified_balance to display:
 - Liquid balance (L-BTC and other assets if any)
 - User-friendly format with BTC values, not just satoshis""",
                 ),
-            )
+            )])
 
         elif name == "bitcoin_balance":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -541,10 +542,10 @@ Use unified_balance to display:
 
 Use btc_balance and display result in both BTC and satoshis.""",
                 ),
-            )
+            )])
 
         elif name == "liquid_balance":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -552,13 +553,13 @@ Use btc_balance and display result in both BTC and satoshis.""",
 
 Use lw_balance and display all assets with their tickers and amounts.""",
                 ),
-            )
+            )])
 
         # Addresses
         elif name == "generate_address":
             network_arg = arguments.get("network", "bitcoin") if arguments else "bitcoin"
             tool = "btc_address" if network_arg == "bitcoin" else "lw_address"
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -566,14 +567,14 @@ Use lw_balance and display all assets with their tickers and amounts.""",
 
 Use {tool} and show me the address in a clear format.""",
                 ),
-            )
+            )])
 
         # Transactions
         elif name == "show_transactions":
             if arguments and "network" in arguments:
                 net = arguments["network"]
                 tool = "btc_transactions" if net == "bitcoin" else "lw_transactions"
-                return PromptMessage(
+                return GetPromptResult(messages=[PromptMessage(
                     role="user",
                     content=TextContent(
                         type="text",
@@ -581,9 +582,9 @@ Use {tool} and show me the address in a clear format.""",
 
 Use {tool} with limit=10 and display in readable format with dates, amounts, and txids.""",
                     ),
-                )
+                )])
             else:
-                return PromptMessage(
+                return GetPromptResult(messages=[PromptMessage(
                     role="user",
                     content=TextContent(
                         type="text",
@@ -591,10 +592,10 @@ Use {tool} with limit=10 and display in readable format with dates, amounts, and
 
 Display transactions from BOTH networks (Bitcoin and Liquid) in chronological order.""",
                     ),
-                )
+                )])
 
         elif name == "send_bitcoin":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -616,10 +617,10 @@ Please:
 7. Send with btc_send
 8. Show txid and explorer link""",
                 ),
-            )
+            )])
 
         elif name == "send_liquid":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -638,10 +639,10 @@ Please:
 7. Send with lw_send or lw_send_asset
 8. Show txid and explorer link""",
                 ),
-            )
+            )])
 
         elif name == "transaction_status":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -657,11 +658,11 @@ Then use lw_tx_status (for Liquid) or check Bitcoin explorer and show:
 - Amount
 - Explorer link""",
                 ),
-            )
+            )])
 
         # Management
         elif name == "list_wallets":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -673,10 +674,10 @@ Use lw_list_wallets and display in table format with:
 - Type (full/watch-only)
 - Whether it has passphrase (encrypted)""",
                 ),
-            )
+            )])
 
         elif name == "export_descriptor":
-            return PromptMessage(
+            return GetPromptResult(messages=[PromptMessage(
                 role="user",
                 content=TextContent(
                     type="text",
@@ -687,7 +688,7 @@ Use lw_export_descriptor and explain:
 - How to import it in another wallet as watch-only
 - That it does NOT provide access to sign transactions""",
                 ),
-            )
+            )])
 
         raise ValueError(f"Unknown prompt: {name}")
 
