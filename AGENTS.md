@@ -259,6 +259,9 @@ Common error codes: `ValueError`, `INSUFFICIENT_FUNDS`, `Generic`.
 2. lw_tx_status(tx="https://blockstream.info/liquid/tx/abc123...")
    → { "txid": "abc123...", "network": "mainnet", "status": "unconfirmed", ... }
 ```
+## Development Environment
+
+This is a Python/uv project. Always use `uv` commands (uv sync, uv run, uvx) instead of pip, venv, or other Python package managers.
 
 ## Development
 
