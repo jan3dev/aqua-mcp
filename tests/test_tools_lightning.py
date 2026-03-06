@@ -167,15 +167,16 @@ class TestPayLightningInvoice:
     def test_pay_lightning_invoice_insufficient_balance(
         self, mock_keypair, MockBoltz, isolated_manager
     ):
-        """5.4: Balance < expectedAmount raises ValueError."""
+        """5.4: Insufficient balance during send raises ValueError."""
         mock_client = MockBoltz.return_value
         mock_client.get_submarine_pairs.return_value = MOCK_SUBMARINE_PAIRS
         mock_client.create_submarine_swap.return_value = MOCK_SWAP_RESPONSE
 
+        isolated_manager.import_mnemonic(TEST_MNEMONIC, "default", "mainnet")
         with patch.object(
-            isolated_manager, "get_balance", return_value=_mock_balance(1000)
+            isolated_manager, "send",
+            side_effect=ValueError("Insufficient L-BTC balance"),
         ):
-            isolated_manager.import_mnemonic(TEST_MNEMONIC, "default", "mainnet")
             with pytest.raises(ValueError, match="[Ii]nsufficient|[Bb]alance"):
                 lbtc_pay_lightning_invoice(
                     invoice=VALID_INVOICE, wallet_name="default"
