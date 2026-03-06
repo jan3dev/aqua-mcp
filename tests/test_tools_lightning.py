@@ -27,10 +27,12 @@ TEST_MNEMONIC = (
 )
 
 MOCK_SUBMARINE_PAIRS = {
-    "L-BTC/BTC": {
-        "rate": 1.0,
-        "fees": {"percentage": 0.1, "minerFees": 19},
-        "limits": {"maximal": 25000000, "minimal": 1000, "maximalZeroConf": 500000},
+    "L-BTC": {
+        "BTC": {
+            "rate": 1.0,
+            "fees": {"percentage": 0.1, "minerFees": 19},
+            "limits": {"maximal": 25000000, "minimal": 1000, "maximalZeroConf": 500000},
+        }
     }
 }
 
@@ -294,10 +296,12 @@ class TestPayLightningInvoice:
     ):
         """5.10: Amount below pair minimum raises ValueError."""
         pairs_with_high_min = {
-            "L-BTC/BTC": {
-                "rate": 1.0,
-                "fees": {"percentage": 0.1, "minerFees": 19},
-                "limits": {"maximal": 25000000, "minimal": 100000, "maximalZeroConf": 500000},
+            "L-BTC": {
+                "BTC": {
+                    "rate": 1.0,
+                    "fees": {"percentage": 0.1, "minerFees": 19},
+                    "limits": {"maximal": 25000000, "minimal": 100000, "maximalZeroConf": 500000},
+                }
             }
         }
         mock_client = MockBoltz.return_value
@@ -321,10 +325,12 @@ class TestPayLightningInvoice:
     ):
         """5.11: Amount above pair maximum raises ValueError."""
         pairs_with_low_max = {
-            "L-BTC/BTC": {
-                "rate": 1.0,
-                "fees": {"percentage": 0.1, "minerFees": 19},
-                "limits": {"maximal": 1000, "minimal": 100, "maximalZeroConf": 500},
+            "L-BTC": {
+                "BTC": {
+                    "rate": 1.0,
+                    "fees": {"percentage": 0.1, "minerFees": 19},
+                    "limits": {"maximal": 1000, "minimal": 100, "maximalZeroConf": 500},
+                }
             }
         }
         mock_client = MockBoltz.return_value
@@ -387,6 +393,21 @@ class TestSwapLightningStatus:
 
         assert result["status"] == "transaction.claimed"
         assert result.get("preimage") == "aa" * 32
+
+    @patch("aqua_mcp.tools.BoltzClient")
+    def test_swap_lightning_status_claim_pending_is_intermediate(
+        self, MockBoltz, isolated_manager
+    ):
+        """6.2b: claim.pending is an intermediate state — no preimage, no refund info."""
+        _save_test_swap(isolated_manager.storage)
+        mock_client = MockBoltz.return_value
+        mock_client.get_swap_status.return_value = {"status": "transaction.claim.pending"}
+
+        result = lbtc_swap_lightning_status(swap_id="test_swap_123")
+
+        assert result["status"] == "transaction.claim.pending"
+        assert "preimage" not in result
+        assert "refund_info" not in result
 
     @patch("aqua_mcp.tools.BoltzClient")
     def test_swap_lightning_status_failure_returns_refund_info(
