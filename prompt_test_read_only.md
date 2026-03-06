@@ -105,7 +105,23 @@ List all my wallets.
 
 ---
 
-### 7. Export Descriptor (Watch-Only)
+### 7. Check Lightning Swap Status
+
+Check the status of a Boltz submarine swap (Lightning payment via L-BTC).
+
+```
+Check the status of my Lightning swap wneeB76Iu5k2
+```
+
+**Expected behavior:**
+- Returns swap status from Boltz API (e.g. `transaction.claim.pending`, `transaction.claimed`)
+- Shows `swap_id`, `status`, `lockup_txid`, `timeout_block_height`, and `network`
+- If claimed, includes `preimage` and `claim_txid`
+- If failed, includes `refund_info` with timeout block height
+
+---
+
+### 8. Export Descriptor (Watch-Only)
 
 Export the Confidential Transactions descriptor for watch-only usage.
 
