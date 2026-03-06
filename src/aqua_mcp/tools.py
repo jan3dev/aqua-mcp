@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 
 from .assets import resolve_asset_name
 from .bitcoin import BitcoinWalletManager
+from .boltz import BoltzClient, SwapInfo, generate_keypair, verify_preimage
 from .wallet import WalletManager
 
 
@@ -539,6 +540,41 @@ def lw_list_wallets() -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Lightning (Boltz submarine swap) tools
+# ---------------------------------------------------------------------------
+
+
+def lbtc_pay_lightning_invoice(
+    invoice: str,
+    wallet_name: str = "default",
+    passphrase: str | None = None,
+) -> dict[str, Any]:
+    """Pay a Lightning invoice using L-BTC via Boltz submarine swap.
+
+    Args:
+        invoice: BOLT11 Lightning invoice (lnbc...)
+        wallet_name: Liquid wallet to pay from. Default: "default"
+        passphrase: Passphrase to decrypt mnemonic (if encrypted)
+
+    Returns:
+        swap_id, lockup_txid, status, expected_amount, timeout_block_height
+    """
+    raise NotImplementedError
+
+
+def lbtc_swap_lightning_status(swap_id: str) -> dict[str, Any]:
+    """Check the status of a Boltz submarine swap.
+
+    Args:
+        swap_id: Boltz swap ID
+
+    Returns:
+        swap_id, status, lockup_txid, timeout_block_height, network
+    """
+    raise NotImplementedError
+
+
 # Tool registry for MCP
 TOOLS = {
     "lw_generate_mnemonic": lw_generate_mnemonic,
@@ -557,4 +593,6 @@ TOOLS = {
     "btc_transactions": btc_transactions,
     "btc_send": btc_send,
     "unified_balance": unified_balance,
+    "lbtc_pay_lightning_invoice": lbtc_pay_lightning_invoice,
+    "lbtc_swap_lightning_status": lbtc_swap_lightning_status,
 }

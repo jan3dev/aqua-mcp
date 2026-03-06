@@ -75,6 +75,7 @@ class Storage:
         self.base_dir = base_dir or DEFAULT_DIR
         self.wallets_dir = self.base_dir / "wallets"
         self.cache_dir = self.base_dir / "cache"
+        self.swaps_dir = self.base_dir / "swaps"
         self.config_path = self.base_dir / "config.json"
         self._ensure_dirs()
 
@@ -86,6 +87,8 @@ class Storage:
         os.chmod(self.wallets_dir, 0o700)
         self.cache_dir.mkdir(exist_ok=True, mode=0o700)
         os.chmod(self.cache_dir, 0o700)
+        self.swaps_dir.mkdir(exist_ok=True, mode=0o700)
+        os.chmod(self.swaps_dir, 0o700)
 
     def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
         """Derive encryption key from passphrase."""
@@ -231,6 +234,22 @@ class Storage:
         if cache_path.is_dir():
             shutil.rmtree(cache_path)
         return True
+
+    # Cache operations
+
+    # Swap operations
+
+    def save_swap(self, swap) -> None:
+        """Save swap data for recovery."""
+        raise NotImplementedError
+
+    def load_swap(self, swap_id: str):
+        """Load swap data. Returns SwapInfo or None."""
+        raise NotImplementedError
+
+    def list_swaps(self) -> list[str]:
+        """List all swap IDs."""
+        raise NotImplementedError
 
     # Cache operations
 
