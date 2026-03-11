@@ -2,8 +2,6 @@
 
 Manual test prompts for validating Aqua MCP read-only functionality using a real wallet. These prompts test operations that don't consume coins or require broadcasting transactions.
 
-Use an agent with Haiku model to run these prompts
-
 ## Prerequisites
 
 - A `.env` file must exist in the project root with the required variables.
@@ -17,8 +15,10 @@ Use an agent with Haiku model to run these prompts
 
 ### 1. Import Wallet
 
+Import the mnemonic and confirm the wallet is created on both networks (Liquid + Bitcoin).
+
 ```
-Import this wallet, name it prompt_wallet_<DATETIME> and tell me the general balance:
+Import this wallet and tell me the general balance:
 SIGNER_MNEMONIC=${SIGNER_MNEMONIC}
 ```
 
@@ -30,6 +30,8 @@ SIGNER_MNEMONIC=${SIGNER_MNEMONIC}
 ---
 
 ### 2. Generate Receive Addresses
+
+Request a Liquid address and a Bitcoin on-chain address for receiving funds.
 
 ```
 Give me a Liquid address and a Bitcoin on-chain address to receive funds.
@@ -75,6 +77,8 @@ Show me my Bitcoin transaction history.
 
 ### 5. View Liquid Transaction History
 
+Show the transaction history for the Liquid wallet.
+
 ```
 Show me my Liquid transaction history.
 ```
@@ -89,6 +93,8 @@ Show me my Liquid transaction history.
 
 ### 6. List All Wallets
 
+Show all wallets currently stored in the system.
+
 ```
 List all my wallets.
 ```
@@ -99,24 +105,12 @@ List all my wallets.
 
 ---
 
-### 7. Check Lightning Swap Status
+### 7. Export Descriptor (Watch-Only)
+
+Export the Confidential Transactions descriptor for watch-only usage.
 
 ```
-Check the status of my Lightning swap wneeB76Iu5k2
-```
-
-**Expected behavior:**
-- Returns swap status from Boltz API (e.g. `transaction.claim.pending`, `transaction.claimed`)
-- Shows `swap_id`, `status`, `lockup_txid`, `timeout_block_height`, and `network`
-- If claimed, includes `preimage` and `claim_txid`
-- If failed, includes `refund_info` with timeout block height
-
----
-
-### 8. Export Descriptor (Watch-Only)
-
-```
-Export the CT descriptor for my latest imported wallet.
+Export the CT descriptor for my default wallet.
 ```
 
 **Expected behavior:**
