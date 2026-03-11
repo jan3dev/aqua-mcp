@@ -10,6 +10,8 @@ from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 from .assets import resolve_asset_name
 from .bitcoin import BitcoinWalletManager
 from .boltz import BoltzClient, SwapInfo, generate_keypair
@@ -470,10 +472,6 @@ def btc_send(
         amount: Amount sent
         address: Destination address
     """
-    if amount <= 0:
-        raise ValueError("Amount must be positive")
-    if fee_rate is not None and fee_rate <= 0:
-        raise ValueError("Fee rate must be positive")
     btc = get_btc_manager()
     txid = btc.send(wallet_name, address, amount, fee_rate, passphrase)
     return {
