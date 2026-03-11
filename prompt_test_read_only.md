@@ -2,7 +2,7 @@
 
 Manual test prompts for validating Aqua MCP read-only functionality using a real wallet. These prompts test operations that don't consume coins or require broadcasting transactions.
 
-Use an agent with Haiku model to run these promts
+Use an agent with Haiku model to run these prompts
 
 ## Prerequisites
 
