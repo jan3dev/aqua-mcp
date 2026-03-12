@@ -16,9 +16,9 @@ AI Assistant ←→ MCP Server (Python) ←→ LWK (Liquid) ──→ Electrum/E
 
 No local server required. Liquid uses Electrum/Esplora; Bitcoin uses Esplora only. All via Blockstream's public infrastructure.
 
-## Tools (18 total)
+## Tools (21 total)
 
-Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix.
+Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; Ankara Lightning receive tools use the `ankara_` prefix.
 
 ### Wallet Management (Liquid)
 
@@ -61,12 +61,20 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix.
 |------|-------------|------------|
 | `unified_balance` | Get balance for both Bitcoin and Liquid | `wallet_name`: optional |
 
-### Lightning (via Boltz)
+### Lightning Send (via Boltz)
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `lbtc_pay_lightning_invoice` | Pay a Lightning invoice using L-BTC via Boltz submarine swap. Fees: ~0.1% + miner fees. Limits: 1,000 - 25,000,000 sats | `invoice`: BOLT11 string, `wallet_name`: optional, `passphrase`: optional |
 | `lbtc_swap_lightning_status` | Check status of a Boltz submarine swap | `swap_id`: string |
+
+### Lightning Receive (via Ankara)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `ankara_ln_receive` | Generate a Lightning invoice to receive L-BTC via Ankara backend. User pays invoice externally and receives L-BTC in Liquid wallet. Limits: 100 - 25,000,000 sats | `amount`: int (sats), `wallet_name`: optional (default: "default") |
+| `ankara_ln_claim` | Claim a settled Ankara Lightning swap | `swap_id`: string |
+| `ankara_ln_verify` | Check settlement status of an Ankara Lightning swap | `swap_id`: string |
 
 ## Resources (3 total)
 
@@ -109,6 +117,8 @@ Wallet data stored in `~/.aqua-mcp/`:
 │   └── work.json
 ├── swaps/               # Boltz submarine swap data (for refund recovery)
 │   └── {swap_id}.json   # Contains swap details + refund private key
+├── ankara_swaps/        # Ankara Lightning receive swap data
+│   └── {swap_id}.json   # Contains swap details + preimage when settled
 └── cache/
     └── <wallet_name>/
         └── btc/
@@ -156,6 +166,24 @@ Wallet data stored in `~/.aqua-mcp/`:
 
 File permissions: `0o600` (contains private refund key for recovery).
 
+### Ankara Swap File Structure
+
+```json
+{
+  "swap_id": "ankara_uuid_123",
+  "boltz_swap_id": "boltz_abc_456",
+  "invoice": "lnbc...",
+  "address": "lq1...",
+  "amount": 100000,
+  "wallet_name": "default",
+  "status": "pending",
+  "created_at": "2026-03-12T12:00:00Z",
+  "preimage": null
+}
+```
+
+File permissions: `0o600`. Status progresses: `pending` → `claimed` → `settled`. Preimage populated when settled.
+
 ### Config Structure
 
 ```json
@@ -199,6 +227,19 @@ File permissions: `0o600` (contains private refund key for recovery).
 - `mcp` - Model Context Protocol SDK
 - `cryptography` - For mnemonic encryption (PBKDF2 + Fernet)
 - `coincurve` - secp256k1 for Boltz swap keypair generation
+
+## Ankara Integration
+
+Ankara backend (`test.aquabtc.com`) provides Lightning → L-BTC swaps (receive side).
+
+**API Endpoint**: Configurable via `ANKARA_API_URL` environment variable (defaults to `https://test.aquabtc.com`)
+
+**Endpoints**:
+- `POST /api/v1/lightning/swaps/create/` - Create receive invoice
+- `POST /api/v1/lightning/swaps/{swap_id}/claim/` - Claim settled swap
+- `GET /api/v1/lightning/lnurlp/verify/{swap_id}` - Verify settlement status
+
+**Amount Limits**: 100 – 25,000,000 sats (no authentication required)
 
 ## Bitcoin Implementation Details
 
@@ -311,17 +352,21 @@ aqua-mcp/
 │   └── aqua_mcp/
 │       ├── __init__.py
 │       ├── server.py   # MCP server entry point (tools, resources, prompts)
-│       ├── tools.py    # Tool implementations (lw_*, btc_*, unified_*, lbtc_*)
+│       ├── tools.py    # Tool implementations (lw_*, btc_*, unified_*, lbtc_*, ankara_*)
 │       ├── wallet.py   # Liquid wallet (LWK)
 │       ├── bitcoin.py  # Bitcoin wallet (BDK)
-│       ├── boltz.py    # Boltz Exchange integration (submarine swaps)
+│       ├── boltz.py    # Boltz Exchange integration (submarine swaps, send)
+│       ├── ankara.py   # Ankara backend integration (Lightning receive)
 │       ├── assets.py   # Asset registry
 │       └── storage.py  # Persistence layer (encryption, config, wallet data)
 └── tests/
     ├── test_tools.py
+    ├── test_tools_lightning.py
     ├── test_storage.py
     ├── test_bitcoin.py
-    └── test_boltz.py
+    ├── test_boltz.py
+    ├── test_ankara.py
+    └── test_server.py
 ```
 
 ### Running Tests
@@ -357,4 +402,4 @@ Use standard Grep/Glob only for: exact string matches, simple file lookups, conf
 
 ---
 
-*Last updated: 2026-03-06*
+*Last updated: 2026-03-12*

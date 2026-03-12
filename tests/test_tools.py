@@ -709,6 +709,9 @@ class TestToolRegistry:
             "unified_balance",
             "lbtc_pay_lightning_invoice",
             "lbtc_swap_lightning_status",
+            "ankara_ln_receive",
+            "ankara_ln_claim",
+            "ankara_ln_verify",
         }
         assert set(TOOLS.keys()) == expected
 

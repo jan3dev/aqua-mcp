@@ -345,6 +345,50 @@ TOOL_SCHEMAS = {
             "required": ["swap_id"],
         },
     },
+    "ankara_ln_receive": {
+        "description": "Generate a Lightning invoice to receive funds via Ankara backend. User pays the invoice externally and receives L-BTC in their Liquid wallet.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "integer",
+                    "description": "Amount in satoshis (100 – 25,000,000)",
+                },
+                "wallet_name": {
+                    "type": "string",
+                    "description": "Liquid wallet to receive funds",
+                    "default": "default",
+                },
+            },
+            "required": ["amount"],
+        },
+    },
+    "ankara_ln_claim": {
+        "description": "Claim a settled Ankara Lightning swap",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "swap_id": {
+                    "type": "string",
+                    "description": "Ankara swap UUID from ankara_ln_receive",
+                },
+            },
+            "required": ["swap_id"],
+        },
+    },
+    "ankara_ln_verify": {
+        "description": "Check the settlement status of an Ankara Lightning swap",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "swap_id": {
+                    "type": "string",
+                    "description": "Ankara swap UUID to check status",
+                },
+            },
+            "required": ["swap_id"],
+        },
+    },
 }
 
 
