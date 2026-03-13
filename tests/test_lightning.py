@@ -24,10 +24,6 @@ from aqua_mcp.tools import (
 from aqua_mcp.wallet import WalletManager
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 TEST_MNEMONIC = (
     "abandon abandon abandon abandon abandon abandon "
     "abandon abandon abandon abandon abandon about"
@@ -85,11 +81,6 @@ def _mock_response(data, status=200):
     return resp
 
 
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
-
-
 @pytest.fixture(autouse=True)
 def isolated_managers():
     """Replace global managers with temp storage."""
@@ -112,11 +103,6 @@ def test_wallet(isolated_managers):
     """Create a test wallet with balance."""
     isolated_managers.import_mnemonic(TEST_MNEMONIC, "default", "mainnet")
     return isolated_managers.load_wallet("default")
-
-
-# ===========================================================================
-# Tests for LightningSwap dataclass
-# ===========================================================================
 
 
 class TestLightningSwap:
@@ -191,11 +177,6 @@ class TestLightningSwap:
         assert swap.refund_private_key is None
 
 
-# ===========================================================================
-# Tests for Boltz status normalization
-# ===========================================================================
-
-
 class TestBoltzStatusNormalization:
     """Tests for _normalize_boltz_status()."""
 
@@ -226,11 +207,6 @@ class TestBoltzStatusNormalization:
         assert _normalize_boltz_status("unknown.status") == "processing"
 
 
-# ===========================================================================
-# Tests for LightningManager - Receive
-# ===========================================================================
-
-
 class TestLightningManagerReceive:
     """Tests for LightningManager.create_receive_invoice()."""
 
@@ -253,7 +229,6 @@ class TestLightningManagerReceive:
             assert swap.invoice == VALID_INVOICE_MAINNET
             assert swap.receive_address is not None
 
-            # Verify persisted
             loaded = isolated_managers.storage.load_lightning_swap(swap.swap_id)
             assert loaded is not None
             assert loaded.swap_id == swap.swap_id
@@ -314,17 +289,11 @@ class TestLightningManagerReceive:
                 manager.create_receive_invoice(100000, "default")
 
 
-# ===========================================================================
-# Tests for LightningManager - Send
-# ===========================================================================
-
-
 class TestLightningManagerSend:
     """Tests for LightningManager.pay_invoice()."""
 
     def test_send_happy_path(self, test_wallet, isolated_managers):
         """Happy path: valid invoice, creates swap and sends L-BTC."""
-        # Give wallet some balance
         with patch("aqua_mcp.wallet.WalletManager.send") as mock_send:
             mock_send.return_value = "lockup_txid_123"
 
@@ -350,7 +319,6 @@ class TestLightningManagerSend:
                         assert swap.lockup_txid == "lockup_txid_123"
                         assert swap.refund_private_key == "privkey"
 
-                        # Verify persisted before send
                         loaded = isolated_managers.storage.load_lightning_swap(swap.swap_id)
                         assert loaded is not None
 
@@ -384,7 +352,6 @@ class TestLightningManagerSend:
         """Invoice amount outside limits raises ValueError."""
         manager = get_lightning_manager()
 
-        # Mock an invoice with too-low amount
         with patch("aqua_mcp.lightning.decode_bolt11_amount_sats") as mock_decode:
             mock_decode.return_value = 50  # Below minimum
 
@@ -399,14 +366,14 @@ class TestLightningManagerSend:
             with patch("aqua_mcp.lightning.decode_bolt11_amount_sats") as mock_decode:
                 mock_boltz_client = MagicMock()
                 mock_boltz.return_value = mock_boltz_client
-                mock_boltz_client.get_submarine_pairs.return_value = {}  # Empty
+                mock_boltz_client.get_submarine_pairs.return_value = {}
                 mock_decode.return_value = 100000
 
                 with pytest.raises(ValueError, match="pair not available"):
                     manager.pay_invoice(VALID_INVOICE_MAINNET, "default")
 
     def test_send_persists_before_sending(self, test_wallet, isolated_managers):
-        """Swap is persisted to disk BEFORE sending L-BTC (critical for recovery)."""
+        """Swap is persisted to disk BEFORE sending L-BTC."""
         manager = get_lightning_manager()
 
         send_called = False
@@ -414,7 +381,6 @@ class TestLightningManagerSend:
         def mock_send(wallet, addr, amount, passphrase=None):
             nonlocal send_called
             send_called = True
-            # At this point, swap should already be persisted
             swaps = isolated_managers.storage.list_lightning_swaps()
             assert len(swaps) > 0
             return "txid"
@@ -440,11 +406,6 @@ class TestLightningManagerSend:
                         assert send_called
 
 
-# ===========================================================================
-# Tests for LightningManager - Receive Status
-# ===========================================================================
-
-
 class TestLightningManagerReceiveStatus:
     """Tests for LightningManager.get_receive_status()."""
 
@@ -452,7 +413,6 @@ class TestLightningManagerReceiveStatus:
         """Settled swap auto-claims and updates status."""
         manager = get_lightning_manager()
 
-        # Create a pending receive swap
         with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
@@ -461,7 +421,6 @@ class TestLightningManagerReceiveStatus:
             swap = manager.create_receive_invoice(100000, "default")
             swap_id = swap.swap_id
 
-        # Now check status with settled response
         with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
@@ -474,7 +433,6 @@ class TestLightningManagerReceiveStatus:
             assert result["preimage"] == "aa" * 32
             assert "claim_warning" not in result
 
-            # Verify swap updated on disk
             loaded = isolated_managers.storage.load_lightning_swap(swap_id)
             assert loaded.status == "completed"
             assert loaded.preimage == "aa" * 32
@@ -498,7 +456,7 @@ class TestLightningManagerReceiveStatus:
             assert "preimage" not in result
 
     def test_status_settled_but_claim_fails_gracefully(self, test_wallet, isolated_managers):
-        """Claim failure adds warning but doesn't raise."""
+        """Claim failure adds warning."""
         manager = get_lightning_manager()
 
         with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
@@ -520,7 +478,6 @@ class TestLightningManagerReceiveStatus:
         """Querying status of a send swap raises ValueError."""
         manager = get_lightning_manager()
 
-        # Create a send swap manually
         swap = LightningSwap(
             swap_id="send_swap_123",
             swap_type="send",
@@ -560,14 +517,9 @@ class TestLightningManagerReceiveStatus:
 
             result = manager.get_receive_status(swap_id)
 
-            assert result["status"] == "pending"  # Local state unchanged
+            assert result["status"] == "pending"
             assert "warning" in result
             assert "Connection error" in result["warning"]
-
-
-# ===========================================================================
-# Tests for Tool Functions
-# ===========================================================================
 
 
 class TestLightningTools:

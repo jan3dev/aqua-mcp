@@ -19,10 +19,6 @@ from aqua_mcp.wallet import WalletManager
 import urllib.error
 
 
-# ---------------------------------------------------------------------------
-# Constants
-# ---------------------------------------------------------------------------
-
 TEST_MNEMONIC = (
     "abandon abandon abandon abandon abandon abandon "
     "abandon abandon abandon abandon abandon about"
@@ -46,11 +42,6 @@ MOCK_ANKARA_VERIFY_RESPONSE_SETTLED = {
 }
 
 
-# ---------------------------------------------------------------------------
-# Mock helpers
-# ---------------------------------------------------------------------------
-
-
 def _mock_response(data, status=200):
     """Create a mock urllib response (context manager)."""
     resp = MagicMock()
@@ -61,11 +52,6 @@ def _mock_response(data, status=200):
     resp.__enter__ = MagicMock(return_value=resp)
     resp.__exit__ = MagicMock(return_value=False)
     return resp
-
-
-# ---------------------------------------------------------------------------
-# Fixtures
-# ---------------------------------------------------------------------------
 
 
 @pytest.fixture(autouse=True)
@@ -88,11 +74,6 @@ def test_wallet(isolated_manager):
     """Create a test wallet with balance."""
     isolated_manager.import_mnemonic(TEST_MNEMONIC, "default", "testnet")
     return isolated_manager.load_wallet("default")
-
-
-# ===========================================================================
-# Layer 1: AnkaraSwapInfo dataclass
-# ===========================================================================
 
 
 class TestAnkaraSwapInfo:
@@ -146,11 +127,6 @@ class TestAnkaraSwapInfo:
         )
         assert swap.preimage == "aa" * 32
         assert swap.to_dict()["preimage"] == "aa" * 32
-
-
-# ===========================================================================
-# Layer 2: AnkaraClient HTTP
-# ===========================================================================
 
 
 class TestAnkaraClientHTTP:
@@ -207,11 +183,6 @@ class TestAnkaraClientHTTP:
             with pytest.raises(RuntimeError) as exc:
                 client.create_swap(100000, "lq1test")
             assert "unreachable" in str(exc.value)
-
-
-# ===========================================================================
-# Layer 3: Storage persistence
-# ===========================================================================
 
 
 class TestAnkaraStoragePersistence:
