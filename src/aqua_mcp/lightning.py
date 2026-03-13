@@ -8,7 +8,6 @@ from .ankara import AnkaraClient, MIN_SWAP_AMOUNT_SATS as ANKARA_MIN_SATS, MAX_S
 from .boltz import BoltzClient, MIN_SWAP_AMOUNT_SATS as BOLTZ_MIN_SATS, MAX_SWAP_AMOUNT_SATS as BOLTZ_MAX_SATS, decode_bolt11_amount_sats, generate_keypair
 
 
-# Boltz status → normalized status mapping
 _BOLTZ_STATUS_MAP = {
     "swap.created": "pending",
     "transaction.mempool": "processing",
@@ -39,13 +38,10 @@ class LightningSwap:
     status: str  # "pending" | "processing" | "completed" | "failed"
     network: str
     created_at: str
-    # Receive-specific
     receive_address: Optional[str] = None
     preimage: Optional[str] = None
-    # Send-specific
     lockup_txid: Optional[str] = None
     claim_txid: Optional[str] = None
-    # Internal — not returned in tool responses
     refund_private_key: Optional[str] = None
     timeout_block_height: Optional[int] = None
 
@@ -56,7 +52,6 @@ class LightningSwap:
     @classmethod
     def from_dict(cls, data: dict) -> "LightningSwap":
         """Reconstruct from dict with backward compatibility."""
-        # Use setdefault for optional fields
         data = {**data}
         for field_name in [
             "receive_address", "preimage", "lockup_txid", "claim_txid",
@@ -95,7 +90,6 @@ class LightningManager:
         Returns:
             LightningSwap with pending status
         """
-        # Validate amount
         if amount < ANKARA_MIN_SATS:
             raise ValueError(
                 f"Amount {amount} sats is below minimum ({ANKARA_MIN_SATS} sats)"
@@ -105,7 +99,6 @@ class LightningManager:
                 f"Amount {amount} sats exceeds maximum ({ANKARA_MAX_SATS} sats)"
             )
 
-        # Load and validate wallet
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
             raise ValueError(f"Wallet '{wallet_name}' not found")
@@ -117,18 +110,15 @@ class LightningManager:
             if not passphrase:
                 raise ValueError("Passphrase required to decrypt mnemonic")
 
-        # Generate fresh Liquid address
         addr = self.wallet_manager.get_address(wallet_name)
         address = addr.address
 
-        # Call Ankara API to create swap
         client = AnkaraClient()
         try:
             swap_resp = client.create_swap(amount, address)
         except Exception as e:
             raise RuntimeError(f"Failed to create Ankara swap: {e}") from e
 
-        # Build and persist LightningSwap
         swap = LightningSwap(
             swap_id=swap_resp["swap_id"],
             swap_type="receive",
@@ -162,14 +152,12 @@ class LightningManager:
         Returns:
             LightningSwap with pending status and lockup_txid
         """
-        # Validate invoice format
         valid_prefixes = ("lnbc", "lntb")
         if not invoice or not any(invoice.startswith(p) for p in valid_prefixes):
             raise ValueError(
                 "Invalid invoice: must be a BOLT11 Lightning invoice starting with 'lnbc' (mainnet) or 'lntb' (testnet)"
             )
 
-        # Load and validate wallet
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
             raise ValueError(f"Wallet '{wallet_name}' not found")
@@ -183,7 +171,6 @@ class LightningManager:
 
         network = wallet_data.network
 
-        # Validate amount against limits
         invoice_amount = decode_bolt11_amount_sats(invoice)
         if invoice_amount is not None:
             if invoice_amount < BOLTZ_MIN_SATS:
@@ -195,22 +182,16 @@ class LightningManager:
                     f"Invoice amount {invoice_amount} sats exceeds maximum ({BOLTZ_MAX_SATS} sats)"
                 )
 
-        # Verify L-BTC/BTC pair is available on Boltz
         client = BoltzClient(network=network)
         pairs = client.get_submarine_pairs()
         pair = pairs.get("L-BTC", {}).get("BTC")
         if not pair:
             raise ValueError("L-BTC/BTC pair not available on Boltz")
 
-        # Generate ephemeral keypair for refund
         refund_privkey, refund_pubkey = generate_keypair()
-
-        # Create submarine swap
         swap_resp = client.create_submarine_swap(invoice, refund_pubkey)
-
         expected_amount = swap_resp["expectedAmount"]
 
-        # Build swap and persist BEFORE sending (critical for refund recovery)
         swap = LightningSwap(
             swap_id=swap_resp["id"],
             swap_type="send",
@@ -226,12 +207,10 @@ class LightningManager:
         )
         self.storage.save_lightning_swap(swap)
 
-        # Send L-BTC to lockup address
         lockup_txid = self.wallet_manager.send(
             wallet_name, swap_resp["address"], expected_amount, passphrase=passphrase
         )
 
-        # Update swap with lockup txid and processing status
         swap.lockup_txid = lockup_txid
         swap.status = "processing"
         self.storage.save_lightning_swap(swap)
@@ -248,14 +227,12 @@ class LightningManager:
         Returns:
             Dict with swap_id, status, amount, wallet_name, invoice, and optional preimage
         """
-        # Load swap
         swap = self.storage.load_lightning_swap(swap_id)
         if not swap:
             raise ValueError(f"Lightning swap not found: {swap_id}")
         if swap.swap_type != "receive":
             raise ValueError(f"Swap {swap_id} is a send swap, not a receive swap")
 
-        # Fetch remote status from Ankara
         client = AnkaraClient()
         warning = None
         try:
@@ -278,7 +255,6 @@ class LightningManager:
             warning = f"Could not fetch remote status: {e}"
             verify_resp = {}
 
-        # Build result
         result = {
             "swap_id": swap.swap_id,
             "status": swap.status,
