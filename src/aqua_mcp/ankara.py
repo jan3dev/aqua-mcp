@@ -10,10 +10,6 @@ from typing import Optional
 # API URL with environment variable override
 ANKARA_API_URL = os.environ.get("ANKARA_API_URL", "https://ankara.aquabtc.com")
 
-# Swap amount limits (satoshis)
-MIN_SWAP_AMOUNT_SATS = 100
-MAX_SWAP_AMOUNT_SATS = 25_000_000
-
 
 @dataclass
 class AnkaraSwapInfo:

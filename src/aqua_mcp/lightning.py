@@ -4,8 +4,12 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime, UTC
 from typing import Optional
 
-from .ankara import AnkaraClient, MIN_SWAP_AMOUNT_SATS as ANKARA_MIN_SATS, MAX_SWAP_AMOUNT_SATS as ANKARA_MAX_SATS
+from .ankara import AnkaraClient
 from .boltz import BoltzClient, MIN_SWAP_AMOUNT_SATS as BOLTZ_MIN_SATS, MAX_SWAP_AMOUNT_SATS as BOLTZ_MAX_SATS, decode_bolt11_amount_sats, generate_keypair
+
+# Ankara swap amount limits (satoshis)
+ANKARA_MIN_SATS = 100
+ANKARA_MAX_SATS = 25_000_000
 
 
 @dataclass

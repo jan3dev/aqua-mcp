@@ -8,12 +8,7 @@ from datetime import datetime, UTC
 
 import pytest
 
-from aqua_mcp.ankara import (
-    AnkaraClient,
-    AnkaraSwapInfo,
-    MIN_SWAP_AMOUNT_SATS,
-    MAX_SWAP_AMOUNT_SATS,
-)
+from aqua_mcp.ankara import AnkaraClient, AnkaraSwapInfo
 from aqua_mcp.storage import Storage
 from aqua_mcp.wallet import WalletManager
 import urllib.error
