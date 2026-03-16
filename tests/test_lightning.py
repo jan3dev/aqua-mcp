@@ -11,7 +11,6 @@ import pytest
 from aqua_mcp.lightning import (
     LightningSwap,
     LightningManager,
-    _normalize_boltz_status,
 )
 from aqua_mcp.storage import Storage
 from aqua_mcp.tools import (
@@ -175,36 +174,6 @@ class TestLightningSwap:
         assert swap.receive_address is None
         assert swap.preimage is None
         assert swap.refund_private_key is None
-
-
-class TestBoltzStatusNormalization:
-    """Tests for _normalize_boltz_status()."""
-
-    def test_normalize_created(self):
-        """swap.created -> pending."""
-        assert _normalize_boltz_status("swap.created") == "pending"
-
-    def test_normalize_mempool(self):
-        """transaction.mempool -> processing."""
-        assert _normalize_boltz_status("transaction.mempool") == "processing"
-
-    def test_normalize_confirmed(self):
-        """transaction.confirmed -> processing."""
-        assert _normalize_boltz_status("transaction.confirmed") == "processing"
-
-    def test_normalize_claimed(self):
-        """transaction.claimed -> completed."""
-        assert _normalize_boltz_status("transaction.claimed") == "completed"
-
-    def test_normalize_failed(self):
-        """Various failure statuses -> failed."""
-        assert _normalize_boltz_status("invoice.failedToPay") == "failed"
-        assert _normalize_boltz_status("swap.expired") == "failed"
-        assert _normalize_boltz_status("transaction.lockupFailed") == "failed"
-
-    def test_normalize_unknown(self):
-        """Unknown status -> processing (default)."""
-        assert _normalize_boltz_status("unknown.status") == "processing"
 
 
 class TestLightningManagerReceive:

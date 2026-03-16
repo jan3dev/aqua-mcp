@@ -8,23 +8,6 @@ from .ankara import AnkaraClient, MIN_SWAP_AMOUNT_SATS as ANKARA_MIN_SATS, MAX_S
 from .boltz import BoltzClient, MIN_SWAP_AMOUNT_SATS as BOLTZ_MIN_SATS, MAX_SWAP_AMOUNT_SATS as BOLTZ_MAX_SATS, decode_bolt11_amount_sats, generate_keypair
 
 
-_BOLTZ_STATUS_MAP = {
-    "swap.created": "pending",
-    "transaction.mempool": "processing",
-    "transaction.confirmed": "processing",
-    "transaction.claim.pending": "processing",
-    "transaction.claimed": "completed",
-    "invoice.failedToPay": "failed",
-    "swap.expired": "failed",
-    "transaction.lockupFailed": "failed",
-}
-
-
-def _normalize_boltz_status(boltz_status: str) -> str:
-    """Convert Boltz status to normalized form."""
-    return _BOLTZ_STATUS_MAP.get(boltz_status, "processing")
-
-
 @dataclass
 class LightningSwap:
     """Unified Lightning swap record for both send and receive."""
