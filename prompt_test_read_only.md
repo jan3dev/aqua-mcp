@@ -114,7 +114,7 @@ Export the CT descriptor for my latest imported wallet.
 ### 8. Check Lightning Swap Status (that I paid)
 
 ```
-Check the status of my Lightning swap wneeB76Iu5k2 at boltz
+Check the status of my Lightning swap JHDBY9rzD2Qn at boltz
 ```
 
 **Expected behavior:**

@@ -651,16 +651,21 @@ def lightning_send(
 
 
 def lightning_transaction_status(swap_id: str) -> dict[str, Any]:
-    """Check the status of a Lightning receive swap and auto-claim when settled.
+    """Check the status of a Lightning swap (send or receive).
+
+    For receive swaps: auto-claims L-BTC when settled. For send swaps: checks
+    Boltz status and retrieves preimage when claimed.
 
     Args:
-        swap_id: Swap ID from lightning_receive
+        swap_id: Swap ID returned from lightning_receive or lightning_send
 
     Returns:
-        swap_id, status, amount, wallet_name, invoice, and optional preimage, warning, claim_warning
+        swap_id, status, amount, wallet_name, invoice; for receive: optional preimage,
+        warning, claim_warning; for send: optional boltz_status, lockup_txid, preimage,
+        claim_txid, refund_info, warning
     """
     manager = get_lightning_manager()
-    return manager.get_receive_status(swap_id)
+    return manager.get_swap_status(swap_id)
 
 
 # Tool registry for MCP

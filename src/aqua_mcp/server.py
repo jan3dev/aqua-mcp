@@ -371,13 +371,13 @@ TOOL_SCHEMAS = {
         },
     },
     "lightning_transaction_status": {
-        "description": "Check the status of a Lightning receive swap. Auto-claims L-BTC when settled.",
+        "description": "Check the status of a Lightning swap (send or receive). For receive: auto-claims L-BTC when settled. For send: checks Boltz status and retrieves preimage when claimed.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "swap_id": {
                     "type": "string",
-                    "description": "Swap ID returned from lightning_receive",
+                    "description": "Swap ID returned from lightning_receive or lightning_send",
                 },
             },
             "required": ["swap_id"],
@@ -443,8 +443,7 @@ LIGHTNING:
   Fees: ~0.1%, Limits: 100 - 25,000,000 sats, Time: ~1-2 min after payment
 - Use lightning_send to pay a BOLT11 invoice using L-BTC (submarine swap via Boltz)
   Fees: ~0.1% + miner fees, Limits: 100 - 25,000,000 sats
-- Use lightning_transaction_status to check status of receive swaps (auto-claims when settled)
-- For send swaps: check on-chain transaction status using lw_tx_status after getting lockup_txid
+- Use lightning_transaction_status to check status of any Lightning swap (send or receive)
 
 WALLET DELETION:
 - ALWAYS use the delete_wallet prompt workflow (check balances, remind about seed backup, confirm)
