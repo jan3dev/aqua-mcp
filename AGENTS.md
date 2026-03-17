@@ -20,7 +20,7 @@ No local server required. Liquid uses Electrum/Esplora; Bitcoin uses Esplora onl
 
 Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified tools are `unified_*`; Lightning tools are `lightning_*`.
 
-### Wallet Management (Liquid)
+### Wallet Management
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
@@ -29,7 +29,7 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 | `lw_export_descriptor` | Export CT descriptor (watch-only) | `wallet_name`: optional |
 | `lw_import_descriptor` | Import watch-only wallet from CT descriptor | `descriptor`: string, `wallet_name`: string, `network`: optional |
 | `lw_list_wallets` | List all wallets | (none) |
-| `delete_wallet` | Delete a wallet and all its cached data | `wallet_name`: string |
+| `delete_wallet` | Delete a wallet and all its cached data. Agent MUST check balances and confirm with user before calling. Use the `delete_wallet` prompt for the safe workflow. | `wallet_name`: string |
 
 ### Wallet Operations (Liquid)
 
@@ -68,7 +68,7 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 |------|-------------|------------|
 | `lightning_receive` | Generate a Lightning invoice to receive L-BTC into Liquid wallet (~1-2 min after payment). Limits: 100 – 25,000,000 sats | `amount`: int (sats), `wallet_name`: optional (default: "default"), `passphrase`: optional |
 | `lightning_send` | Pay a Lightning invoice using L-BTC via Boltz submarine swap. Fees: ~0.1% + miner fees. Limits: 100 – 25,000,000 sats | `invoice`: BOLT11 string (lnbc... or lntb...), `wallet_name`: optional, `passphrase`: optional |
-| `lightning_transaction_status` | Check status of a Lightning receive swap. Auto-claims L-BTC when settled. | `swap_id`: string |
+| `lightning_transaction_status` | Check status of a Lightning swap (send or receive). For receive: auto-claims L-BTC when settled. For send: retrieves preimage when claimed. | `swap_id`: string |
 
 ## Resources (3 total)
 
@@ -441,4 +441,4 @@ Use standard Grep/Glob only for: exact string matches, simple file lookups, conf
 
 ---
 
-*Last updated: 2026-03-12*
+*Last updated: 2026-03-17*
