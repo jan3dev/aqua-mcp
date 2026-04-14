@@ -160,7 +160,6 @@ class TestBitcoinWalletManager:
         wallet, network = btc_manager._get_wallet_with_signer(
             "signer",
             TEST_MNEMONIC,
-            None,
         )
         assert wallet is not None
         assert network == "mainnet"
@@ -169,7 +168,6 @@ class TestBitcoinWalletManager:
         wallet2, network2 = btc_manager._get_wallet_with_signer(
             "signer",
             TEST_MNEMONIC,
-            None,
         )
         assert wallet2 is not None
         assert network2 == "mainnet"

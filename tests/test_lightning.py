@@ -235,14 +235,14 @@ class TestLightningManagerReceive:
         with pytest.raises(ValueError, match="cannot receive"):
             manager.create_receive_invoice(100000, "watch_only")
 
-    def test_receive_encrypted_wallet_no_passphrase(self, isolated_managers):
-        """Encrypted wallet without passphrase raises ValueError."""
+    def test_receive_encrypted_wallet_no_password(self, isolated_managers):
+        """Encrypted wallet without password raises ValueError."""
         manager = get_lightning_manager()
         isolated_managers.import_mnemonic(
-            TEST_MNEMONIC, "encrypted", "mainnet", passphrase="test-pass"
+            TEST_MNEMONIC, "encrypted", "mainnet", password="test-pass"
         )
 
-        with pytest.raises(ValueError, match="Passphrase required"):
+        with pytest.raises(ValueError, match="Password required"):
             manager.create_receive_invoice(100000, "encrypted")
 
     def test_receive_api_error_propagates(self, test_wallet):
@@ -424,7 +424,7 @@ class TestLightningManagerSend:
         """Swap is persisted to disk BEFORE sending L-BTC."""
         send_called = False
 
-        def mock_send_impl(wallet, addr, amount, passphrase=None):
+        def mock_send_impl(wallet, addr, amount, password=None):
             nonlocal send_called
             send_called = True
             swaps = isolated_managers.storage.list_lightning_swaps()

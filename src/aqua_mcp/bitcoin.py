@@ -106,16 +106,21 @@ class BitcoinWalletManager:
         mnemonic: str,
         wallet_name: str,
         network: str = "mainnet",
-        passphrase: Optional[str] = None,
     ) -> WalletData:
-        """Create a Bitcoin wallet from mnemonic (BIP84). Persists descriptors to storage."""
+        """Create a Bitcoin wallet from mnemonic (BIP84). Persists descriptors to storage.
+
+        The BIP39 passphrase is intentionally NOT used here. LWK (Liquid) does not
+        support a BIP39 passphrase, so applying one on the Bitcoin side would make
+        the two networks derive from different seeds and produce descriptors that
+        do not match when the same mnemonic is imported into another wallet.
+        """
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
             raise ValueError(f"Wallet '{wallet_name}' not found (create Liquid wallet first)")
 
         net = _network_bdk(network)
         bdk_mnemonic = bdk.Mnemonic.from_string(mnemonic)
-        secret_key = bdk.DescriptorSecretKey(net, bdk_mnemonic, passphrase)
+        secret_key = bdk.DescriptorSecretKey(net, bdk_mnemonic, None)
         external_desc = bdk.Descriptor.new_bip84(
             secret_key, bdk.KeychainKind.EXTERNAL, net
         )
@@ -141,9 +146,8 @@ class BitcoinWalletManager:
     def _get_wallet(
         self,
         wallet_name: str,
-        passphrase: Optional[str] = None,
     ) -> tuple[bdk.Wallet, str]:
-        """Get or create BDK wallet. Returns (Wallet, network)."""
+        """Get or create BDK wallet (watch-only loader). Returns (Wallet, network)."""
         if wallet_name in self._wallets and wallet_name in self._networks:
             return self._wallets[wallet_name], self._networks[wallet_name]
 
@@ -180,16 +184,18 @@ class BitcoinWalletManager:
         self,
         wallet_name: str,
         mnemonic: str,
-        passphrase: Optional[str] = None,
     ) -> tuple[bdk.Wallet, str]:
-        """Get or create BDK wallet with signing capability (from mnemonic)."""
+        """Get or create BDK wallet with signing capability (from mnemonic).
+
+        BIP39 passphrase is intentionally NOT used (see ``create_wallet``).
+        """
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
             raise ValueError(f"Wallet '{wallet_name}' not found")
 
         net = _network_bdk(wallet_data.network)
         bdk_mnemonic = bdk.Mnemonic.from_string(mnemonic)
-        secret_key = bdk.DescriptorSecretKey(net, bdk_mnemonic, passphrase)
+        secret_key = bdk.DescriptorSecretKey(net, bdk_mnemonic, None)
         external_desc = bdk.Descriptor.new_bip84(
             secret_key, bdk.KeychainKind.EXTERNAL, net
         )
@@ -283,9 +289,13 @@ class BitcoinWalletManager:
         address: str,
         amount: int,
         fee_rate: Optional[int] = None,
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> str:
-        """Build, sign and broadcast a Bitcoin transaction. Returns txid."""
+        """Build, sign and broadcast a Bitcoin transaction. Returns txid.
+
+        ``password`` is used only to decrypt the at-rest mnemonic when the wallet
+        was imported with an encryption password. It is NOT a BIP39 passphrase.
+        """
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
             raise ValueError(f"Wallet '{wallet_name}' not found")
@@ -299,15 +309,13 @@ class BitcoinWalletManager:
             raise ValueError(
                 "No mnemonic available for signing (import wallet with mnemonic to enable sending)"
             )
-        needs_passphrase = self.storage.is_mnemonic_encrypted(wallet_data.encrypted_mnemonic)
-        if needs_passphrase and not passphrase:
-            raise ValueError("Passphrase required to decrypt mnemonic")
+        needs_password = self.storage.is_mnemonic_encrypted(wallet_data.encrypted_mnemonic)
+        if needs_password and not password:
+            raise ValueError("Password required to decrypt mnemonic")
         mnemonic = self.storage.retrieve_mnemonic(
-            wallet_data.encrypted_mnemonic, passphrase
+            wallet_data.encrypted_mnemonic, password
         )
-        wallet, network = self._get_wallet_with_signer(
-            wallet_name, mnemonic, passphrase
-        )
+        wallet, network = self._get_wallet_with_signer(wallet_name, mnemonic)
         self.sync_wallet(wallet_name)
 
         net = _network_bdk(network)

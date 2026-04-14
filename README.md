@@ -146,7 +146,7 @@ Default config location: `~/.aqua-mcp/config.json`
 
 ## Security
 
-Mnemonics are encrypted at rest using a passphrase (PBKDF2 + Fernet). Without a passphrase, the mnemonic is stored base64-encoded only — use a passphrase for real funds.
+Mnemonics are encrypted at rest using a password (PBKDF2 + Fernet). Without a password, the mnemonic is stored base64-encoded only — use a password for real funds. **Note:** this password is NOT a BIP39 passphrase; the derived Liquid/Bitcoin keys depend solely on the mnemonic, so the same mnemonic restores identical descriptors in any BIP39-compliant wallet (AQUA, Blockstream Green, Jade, etc.).
 
 For maximum security you can:
 1. Generate wallet on an air-gapped device

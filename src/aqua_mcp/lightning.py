@@ -76,7 +76,7 @@ class LightningManager:
         self,
         amount: int,
         wallet_name: str = "default",
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> LightningSwap:
         """
         Generate a Lightning invoice to receive funds.
@@ -84,7 +84,7 @@ class LightningManager:
         Args:
             amount: Amount in satoshis (100 – 25,000,000)
             wallet_name: Liquid wallet to receive into
-            passphrase: Passphrase to decrypt mnemonic (if encrypted)
+            password: Password to decrypt mnemonic (if encrypted at rest)
 
         Returns:
             LightningSwap with pending status
@@ -106,8 +106,8 @@ class LightningManager:
         if wallet_data.encrypted_mnemonic and self.storage.is_mnemonic_encrypted(
             wallet_data.encrypted_mnemonic
         ):
-            if not passphrase:
-                raise ValueError("Passphrase required to decrypt mnemonic")
+            if not password:
+                raise ValueError("Password required to decrypt mnemonic")
 
         addr = self.wallet_manager.get_address(wallet_name)
         address = addr.address
@@ -138,7 +138,7 @@ class LightningManager:
         self,
         invoice: str,
         wallet_name: str = "default",
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> LightningSwap:
         """
         Pay a Lightning invoice using L-BTC via Boltz submarine swap.
@@ -146,7 +146,7 @@ class LightningManager:
         Args:
             invoice: BOLT11 Lightning invoice (lnbc... or lntb...)
             wallet_name: Liquid wallet to pay from
-            passphrase: Passphrase to decrypt mnemonic (if encrypted)
+            password: Password to decrypt mnemonic (if encrypted at rest)
 
         Returns:
             LightningSwap with pending status and lockup_txid
@@ -165,8 +165,8 @@ class LightningManager:
         if wallet_data.encrypted_mnemonic and self.storage.is_mnemonic_encrypted(
             wallet_data.encrypted_mnemonic
         ):
-            if not passphrase:
-                raise ValueError("Passphrase required to decrypt mnemonic")
+            if not password:
+                raise ValueError("Password required to decrypt mnemonic")
 
         network = wallet_data.network
 
@@ -214,7 +214,7 @@ class LightningManager:
         self.storage.save_lightning_swap(swap)
 
         lockup_txid = self.wallet_manager.send(
-            wallet_name, swap_resp["address"], expected_amount, passphrase=passphrase
+            wallet_name, swap_resp["address"], expected_amount, password=password
         )
 
         swap.lockup_txid = lockup_txid
