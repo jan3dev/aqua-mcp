@@ -115,8 +115,10 @@ class WalletManager:
     ) -> WalletData:
         """Import wallet from mnemonic.
 
-        ``password`` is used only to encrypt the mnemonic at rest.
-        The derived Liquid descriptor depends solely on the mnemonic.
+        ``password`` is used only to encrypt the mnemonic at rest. LWK does not
+        support a BIP39 passphrase, so the derived Liquid descriptor depends
+        solely on the mnemonic — matching what Aqua/Green/Jade produce for the
+        same seed.
         """
         if self.storage.wallet_exists(wallet_name):
             raise ValueError(f"Wallet '{wallet_name}' already exists")
@@ -175,7 +177,7 @@ class WalletManager:
         wallet_name: str,
         password: Optional[str] = None,
     ) -> WalletData:
-        """Load wallet, optionally decrypting mnemonic."""
+        """Load wallet, optionally decrypting mnemonic with the at-rest password."""
         wallet = self.storage.load_wallet(wallet_name)
         if not wallet:
             raise ValueError(f"Wallet '{wallet_name}' not found")
@@ -311,7 +313,11 @@ class WalletManager:
         asset_id: Optional[str] = None,
         password: Optional[str] = None,
     ) -> str:
-        """Send transaction. Returns txid."""
+        """Send transaction. Returns txid.
+
+        ``password`` is used only to decrypt the at-rest mnemonic; it is NOT a
+        BIP39 passphrase.
+        """
         wallet = self.storage.load_wallet(wallet_name)
         if not wallet:
             raise ValueError(f"Wallet '{wallet_name}' not found")
