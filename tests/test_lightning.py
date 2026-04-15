@@ -515,6 +515,85 @@ class TestLightningManagerReceiveStatus:
             assert "claim_warning" in result
             assert "Claim API error" in result["claim_warning"]
 
+    def test_status_409_already_claimed_completes_swap(self, test_wallet, isolated_managers):
+        """409 'already claimed' from Ankara is treated as successful completion."""
+        manager = get_lightning_manager()
+
+        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+            mock_client = MagicMock()
+            mock_ankara.return_value = mock_client
+            mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
+            swap = manager.create_receive_invoice(100000, "default")
+            swap_id = swap.swap_id
+
+            mock_client.verify_swap.return_value = MOCK_ANKARA_VERIFY_SETTLED
+            mock_client.claim_swap.side_effect = RuntimeError(
+                "Ankara API error (409 POST /api/v1/lightning/swaps/"
+                f"{swap_id}/claim/): Swap has already been claimed."
+            )
+
+            result = manager.get_receive_status(swap_id)
+
+            assert result["status"] == "completed"
+            assert result["preimage"] == "aa" * 32
+            assert "claim_warning" not in result
+
+            loaded = isolated_managers.storage.load_lightning_swap(swap_id)
+            assert loaded.status == "completed"
+            assert loaded.preimage == "aa" * 32
+
+    def test_status_409_idempotent_second_check(self, test_wallet, isolated_managers):
+        """After 409 completes the swap, subsequent checks skip claiming."""
+        manager = get_lightning_manager()
+
+        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+            mock_client = MagicMock()
+            mock_ankara.return_value = mock_client
+            mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
+            swap = manager.create_receive_invoice(100000, "default")
+            swap_id = swap.swap_id
+
+            mock_client.verify_swap.return_value = MOCK_ANKARA_VERIFY_SETTLED
+            mock_client.claim_swap.side_effect = RuntimeError(
+                "Ankara API error (409 POST /api/v1/lightning/swaps/"
+                f"{swap_id}/claim/): Swap has already been claimed."
+            )
+
+            result1 = manager.get_receive_status(swap_id)
+            assert result1["status"] == "completed"
+
+            mock_client.claim_swap.reset_mock()
+            result2 = manager.get_receive_status(swap_id)
+
+            assert result2["status"] == "completed"
+            mock_client.claim_swap.assert_not_called()
+
+    def test_status_real_error_still_warns(self, test_wallet, isolated_managers):
+        """Non-409 errors (e.g. 500) keep status pending with claim_warning."""
+        manager = get_lightning_manager()
+
+        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+            mock_client = MagicMock()
+            mock_ankara.return_value = mock_client
+            mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
+            swap = manager.create_receive_invoice(100000, "default")
+            swap_id = swap.swap_id
+
+            mock_client.verify_swap.return_value = MOCK_ANKARA_VERIFY_SETTLED
+            mock_client.claim_swap.side_effect = RuntimeError(
+                "Ankara API error (500 POST /api/v1/lightning/swaps/"
+                f"{swap_id}/claim/): Internal Server Error"
+            )
+
+            result = manager.get_receive_status(swap_id)
+
+            assert result["status"] == "pending"
+            assert "claim_warning" in result
+            assert "500" in result["claim_warning"]
+
+            loaded = isolated_managers.storage.load_lightning_swap(swap_id)
+            assert loaded.status == "pending"
+
     def test_status_send_swap_raises(self, test_wallet, isolated_managers):
         """Querying status of a send swap raises ValueError."""
         manager = get_lightning_manager()
