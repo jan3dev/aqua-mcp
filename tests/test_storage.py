@@ -89,16 +89,16 @@ class TestStorage:
     def test_mnemonic_encryption(self, temp_storage):
         """Test mnemonic encryption/decryption."""
         mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
-        passphrase = "test123"
-        
-        encrypted = temp_storage.encrypt_mnemonic(mnemonic, passphrase)
+        password = "test123"
+
+        encrypted = temp_storage.encrypt_mnemonic(mnemonic, password)
         assert encrypted != mnemonic
-        
-        decrypted = temp_storage.decrypt_mnemonic(encrypted, passphrase)
+
+        decrypted = temp_storage.decrypt_mnemonic(encrypted, password)
         assert decrypted == mnemonic
 
-    def test_mnemonic_wrong_passphrase(self, temp_storage):
-        """Test that wrong passphrase fails."""
+    def test_mnemonic_wrong_password(self, temp_storage):
+        """Test that the wrong password fails to decrypt."""
         mnemonic = "test mnemonic"
         encrypted = temp_storage.encrypt_mnemonic(mnemonic, "correct")
 

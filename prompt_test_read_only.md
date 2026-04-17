@@ -114,7 +114,7 @@ Export the CT descriptor for my latest imported wallet.
 ### 8. Check Lightning Swap Status (that I paid)
 
 ```
-Check the status of my Lightning swap JHDBY9rzD2Qn at boltz
+Check the status of my Lightning swap awmXJD5qp6M1 at boltz
 ```
 
 **Expected behavior:**
@@ -143,7 +143,7 @@ Generate a Lightning invoice to receive 500 sats into my Liquid wallet.
 ### 10. Check Lightning Swap Status (Receiving)
 
 ```
-Check the status of my Lightning swap id 3882e4fd-c73a-4e72-abbe-18ac1ea3b2aa
+Check the status of my Lightning swap id 1a5761b6-75b7-4481-ab34-5f7cb9526b5f
 ```
 
 **Expected behavior:**
@@ -167,17 +167,17 @@ Import a wallet named delete_test_<DATETIME> using the mnemonic "abandon abandon
 
 ---
 
-### 12. Seed Backup & Restore with Passphrase
+### 12. Seed Backup & Restore with Password
 
 ```
-Create a new wallet named test_seed_restore_<DATETIME> with passphrase "test". Generate the first Bitcoin receiving address and remember it. Then delete the wallet. Re-import the wallet using the same seed and passphrase "test", generate the first Bitcoin receiving address again, and verify it matches the original.
+Create a new wallet named test_seed_restore_<DATETIME> with password "test". Generate the first Bitcoin receiving address and remember it. Then delete the wallet. Re-import the wallet using the same seed and password "test", generate the first Bitcoin receiving address again, and verify it matches the original.
 ```
 
 **Expected behavior:**
-- New mnemonic is generated and wallet is imported with passphrase "test"
+- New mnemonic is generated and wallet is imported with password "test"
 - First BTC address is derived and stored in memory
 - Wallet is successfully deleted
-- Wallet is re-imported from the same mnemonic + passphrase "test"
+- Wallet is re-imported from the same mnemonic + password "test"
 - New BTC address matches the original (deterministic derivation)
 
 ---

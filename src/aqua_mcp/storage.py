@@ -14,6 +14,8 @@ from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 import base64
 
+SALT_LENGTH = 16
+
 
 DEFAULT_DIR = Path.home() / ".aqua-mcp"
 SWAP_ID_PATTERN = re.compile(r'^[a-zA-Z0-9_-]{1,128}$')
@@ -97,50 +99,56 @@ class Storage:
         self.lightning_swaps_dir.mkdir(exist_ok=True, mode=0o700)
         os.chmod(self.lightning_swaps_dir, 0o700)
 
-    def _derive_key(self, passphrase: str, salt: bytes) -> bytes:
-        """Derive encryption key from passphrase."""
+    def _derive_key(self, password: str, salt: bytes) -> bytes:
+        """Derive encryption key from password."""
         kdf = PBKDF2HMAC(
             algorithm=hashes.SHA256(),
             length=32,
             salt=salt,
             iterations=480000,
         )
-        return base64.urlsafe_b64encode(kdf.derive(passphrase.encode()))
+        return base64.urlsafe_b64encode(kdf.derive(password.encode()))
 
-    def encrypt_mnemonic(self, mnemonic: str, passphrase: str) -> str:
-        """Encrypt mnemonic with passphrase."""
-        salt = os.urandom(16)
-        key = self._derive_key(passphrase, salt)
+    def encrypt_mnemonic(self, mnemonic: str, password: str) -> str:
+        """Encrypt mnemonic with password (used only for at-rest encryption)."""
+        salt = os.urandom(SALT_LENGTH)
+        key = self._derive_key(password, salt)
         f = Fernet(key)
         encrypted = f.encrypt(mnemonic.encode())
         # Store salt + encrypted data
         return base64.b64encode(salt + encrypted).decode()
 
-    def decrypt_mnemonic(self, encrypted: str, passphrase: str) -> str:
-        """Decrypt mnemonic with passphrase."""
+    def decrypt_mnemonic(self, encrypted: str, password: str) -> str:
+        """Decrypt mnemonic with password."""
         data = base64.b64decode(encrypted)
-        salt = data[:16]
-        encrypted_data = data[16:]
-        key = self._derive_key(passphrase, salt)
+        salt = data[:SALT_LENGTH]
+        encrypted_data = data[SALT_LENGTH:]
+        key = self._derive_key(password, salt)
         f = Fernet(key)
         return f.decrypt(encrypted_data).decode()
 
-    def store_mnemonic(self, mnemonic: str, passphrase: Optional[str] = None) -> str:
-        """Store mnemonic, encrypting only when a passphrase is provided."""
-        if passphrase:
-            return self.encrypt_mnemonic(mnemonic, passphrase)
+    def store_mnemonic(self, mnemonic: str, password: Optional[str] = None) -> str:
+        """Store mnemonic, encrypting only when a password is provided.
+
+        NOTE: ``password`` is used exclusively to encrypt the mnemonic on disk.
+        It is NOT used as a BIP39 passphrase — the derived seed/keys depend
+        only on the mnemonic itself, so descriptors stay portable across
+        wallets that accept the same mnemonic (AQUA, Blockstream Green, etc.).
+        """
+        if password:
+            return self.encrypt_mnemonic(mnemonic, password)
         return "plain:" + base64.b64encode(mnemonic.encode()).decode()
 
-    def retrieve_mnemonic(self, stored: str, passphrase: Optional[str] = None) -> str:
+    def retrieve_mnemonic(self, stored: str, password: Optional[str] = None) -> str:
         """Retrieve mnemonic stored by store_mnemonic."""
         if stored.startswith("plain:"):
             return base64.b64decode(stored[6:]).decode()
-        if not passphrase:
-            raise ValueError("Passphrase required to decrypt mnemonic")
-        return self.decrypt_mnemonic(stored, passphrase)
+        if not password:
+            raise ValueError("Password required to decrypt mnemonic")
+        return self.decrypt_mnemonic(stored, password)
 
     def is_mnemonic_encrypted(self, stored: str) -> bool:
-        """Check whether a stored mnemonic requires a passphrase."""
+        """Check whether a stored mnemonic requires a password to decrypt."""
         return not stored.startswith("plain:")
 
     # Config operations
