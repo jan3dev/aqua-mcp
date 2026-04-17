@@ -111,9 +111,13 @@ class WalletManager:
         mnemonic: str,
         wallet_name: str = "default",
         network: str = "mainnet",
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> WalletData:
-        """Import wallet from mnemonic."""
+        """Import wallet from mnemonic.
+
+        ``password`` is used only to encrypt the mnemonic at rest.
+        The derived Liquid descriptor depends solely on the mnemonic.
+        """
         if self.storage.wallet_exists(wallet_name):
             raise ValueError(f"Wallet '{wallet_name}' already exists")
 
@@ -123,7 +127,7 @@ class WalletManager:
         signer = lwk.Signer(lwk_mnemonic, net)
         descriptor = str(signer.wpkh_slip77_descriptor())
 
-        encrypted = self.storage.store_mnemonic(mnemonic, passphrase)
+        encrypted = self.storage.store_mnemonic(mnemonic, password)
 
         # Create and save wallet
         wallet = WalletData(
@@ -169,7 +173,7 @@ class WalletManager:
     def load_wallet(
         self,
         wallet_name: str,
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> WalletData:
         """Load wallet, optionally decrypting mnemonic."""
         wallet = self.storage.load_wallet(wallet_name)
@@ -177,10 +181,10 @@ class WalletManager:
             raise ValueError(f"Wallet '{wallet_name}' not found")
 
         if wallet.encrypted_mnemonic:
-            needs_passphrase = self.storage.is_mnemonic_encrypted(wallet.encrypted_mnemonic)
-            if not needs_passphrase or passphrase:
+            needs_password = self.storage.is_mnemonic_encrypted(wallet.encrypted_mnemonic)
+            if not needs_password or password:
                 mnemonic = self.storage.retrieve_mnemonic(
-                    wallet.encrypted_mnemonic, passphrase
+                    wallet.encrypted_mnemonic, password
                 )
                 net = self._get_network(wallet.network)
                 lwk_mnemonic = lwk.Mnemonic(mnemonic)
@@ -305,7 +309,7 @@ class WalletManager:
         address: str,
         amount: int,
         asset_id: Optional[str] = None,
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> str:
         """Send transaction. Returns txid."""
         wallet = self.storage.load_wallet(wallet_name)
@@ -321,10 +325,10 @@ class WalletManager:
         if wallet_name not in self._signers:
             if not wallet.encrypted_mnemonic:
                 raise ValueError("No mnemonic available for signing")
-            needs_passphrase = self.storage.is_mnemonic_encrypted(wallet.encrypted_mnemonic)
-            if needs_passphrase and not passphrase:
-                raise ValueError("Passphrase required to decrypt mnemonic")
-            self.load_wallet(wallet_name, passphrase)
+            needs_password = self.storage.is_mnemonic_encrypted(wallet.encrypted_mnemonic)
+            if needs_password and not password:
+                raise ValueError("Password required to decrypt mnemonic")
+            self.load_wallet(wallet_name, password)
 
         signer = self._signers[wallet_name]
         wollet = self._get_wollet(wallet_name)

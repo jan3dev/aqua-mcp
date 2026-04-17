@@ -25,7 +25,7 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 | Tool | Description | Parameters |
 |------|-------------|------------|
 | `lw_generate_mnemonic` | Generate a new BIP39 mnemonic | (default: 12 words) |
-| `lw_import_mnemonic` | Import wallet from mnemonic; also creates Bitcoin wallet from same mnemonic (unified) | `mnemonic`: string, `wallet_name`: optional, `network`: mainnet/testnet, `passphrase`: optional |
+| `lw_import_mnemonic` | Import wallet from mnemonic; also creates Bitcoin wallet from same mnemonic (unified) | `mnemonic`: string, `wallet_name`: optional, `network`: mainnet/testnet, `password`: optional |
 | `lw_export_descriptor` | Export CT descriptor (watch-only) | `wallet_name`: optional |
 | `lw_import_descriptor` | Import watch-only wallet from CT descriptor | `descriptor`: string, `wallet_name`: string, `network`: optional |
 | `lw_list_wallets` | List all wallets | (none) |
@@ -43,8 +43,8 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `lw_send` | Create, sign and broadcast L-BTC transaction | `wallet_name`, `address`, `amount` (sats), `passphrase`: optional |
-| `lw_send_asset` | Send a specific Liquid asset | `wallet_name`, `address`, `amount` (sats), `asset_id`, `passphrase`: optional |
+| `lw_send` | Create, sign and broadcast L-BTC transaction | `wallet_name`, `address`, `amount` (sats), `password`: optional |
+| `lw_send_asset` | Send a specific Liquid asset | `wallet_name`, `address`, `amount` (sats), `asset_id`, `password`: optional |
 | `lw_tx_status` | Get transaction status (txid or Blockstream URL) | `tx`: string (64-char hex txid or blockstream.info URL) |
 
 ### Bitcoin (btc_*)
@@ -54,7 +54,7 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 | `btc_balance` | Get Bitcoin wallet balance in satoshis | `wallet_name`: optional |
 | `btc_address` | Generate Bitcoin receive address (bc1...) | `wallet_name`: optional, `index`: optional |
 | `btc_transactions` | List Bitcoin transaction history | `wallet_name`: optional, `limit`: optional (default: 10) |
-| `btc_send` | Send BTC to an address | `wallet_name`, `address`, `amount` (sats), `fee_rate`: optional (sat/vB), `passphrase`: optional |
+| `btc_send` | Send BTC to an address | `wallet_name`, `address`, `amount` (sats), `fee_rate`: optional (sat/vB), `password`: optional |
 
 ### Unified
 
@@ -66,8 +66,8 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 
 | Tool | Description | Parameters |
 |------|-------------|------------|
-| `lightning_receive` | Generate a Lightning invoice to receive L-BTC into Liquid wallet (~1-2 min after payment). Limits: 100 – 25,000,000 sats | `amount`: int (sats), `wallet_name`: optional (default: "default"), `passphrase`: optional |
-| `lightning_send` | Pay a Lightning invoice using L-BTC via Boltz submarine swap. Fees: ~0.1% + miner fees. Limits: 100 – 25,000,000 sats | `invoice`: BOLT11 string (lnbc... or lntb...), `wallet_name`: optional, `passphrase`: optional |
+| `lightning_receive` | Generate a Lightning invoice to receive L-BTC into Liquid wallet (~1-2 min after payment). Limits: 100 – 25,000,000 sats | `amount`: int (sats), `wallet_name`: optional (default: "default"), `password`: optional |
+| `lightning_send` | Pay a Lightning invoice using L-BTC via Boltz submarine swap. Fees: ~0.1% + miner fees. Limits: 100 – 25,000,000 sats | `invoice`: BOLT11 string (lnbc... or lntb...), `wallet_name`: optional, `password`: optional |
 | `lightning_transaction_status` | Check status of a Lightning swap (send or receive). For receive: auto-claims L-BTC when settled. For send: retrieves preimage when claimed. | `swap_id`: string |
 
 ## Resources (3 total)
@@ -78,7 +78,7 @@ MCP resources provide static documentation to AI assistants.
 |-----|------|-------------|
 | `aqua://docs/quickstart` | Quick Start Guide | Creating wallets, checking balance, receiving/sending funds |
 | `aqua://docs/networks` | Network Reference | Bitcoin and Liquid network details, address formats, explorers, common assets |
-| `aqua://docs/security` | Security Best Practices | Passphrase usage, encryption, backup, watch-only wallets, recovery |
+| `aqua://docs/security` | Security Best Practices | Password usage, at-rest encryption, backup, watch-only wallets, recovery |
 
 ## Prompts (14 total)
 
@@ -86,7 +86,7 @@ MCP prompts provide pre-built conversation starters for common workflows.
 
 | Prompt | Description | Arguments |
 |--------|-------------|-----------|
-| `create_new_wallet` | Create a new wallet with mnemonic and passphrase | `wallet_name`: optional, `network`: optional |
+| `create_new_wallet` | Create a new wallet with mnemonic and optional at-rest password | `wallet_name`: optional, `network`: optional |
 | `import_seed` | Import an existing wallet from a mnemonic | `wallet_name`: optional |
 | `show_balance` | Show wallet balance (both networks by default) | `wallet_name`: optional |
 | `bitcoin_balance` | Show only Bitcoin balance | `wallet_name`: optional |
@@ -235,7 +235,7 @@ File permissions: `0o600`. Status values: `pending` | `processing` | `completed`
 
 ## Security Considerations
 
-1. **Mnemonic Storage**: When a passphrase is provided, it is used as the password to encrypt the mnemonic at rest (PBKDF2 480k iterations + Fernet). Without passphrase, the mnemonic is stored as base64 (not encrypted)
+1. **Mnemonic Storage**: When a password is provided, it encrypts the mnemonic at rest (PBKDF2 480k iterations + Fernet). Without password, the mnemonic is stored as base64 (not encrypted). NOTE: this password is NOT a BIP39 passphrase — derived keys depend solely on the mnemonic, so the same mnemonic restores identical descriptors in any BIP39-compliant wallet.
 2. **Watch-Only Mode**: Supports CT descriptors for balance checking without signing capability
 3. **No Server**: All operations are local + public Electrum/Esplora servers
 4. **Network Isolation**: Mainnet/testnet wallets are kept separate
@@ -291,7 +291,7 @@ Ankara backend (`test.aquabtc.com`) provides Lightning → L-BTC swaps (receive 
 ### BDK Send Flow
 
 1. **Validate** amount > 0, fee_rate > 0 (if provided), wallet has mnemonic
-2. **Decrypt** mnemonic using passphrase (if encrypted)
+2. **Decrypt** mnemonic using password (if encrypted at rest)
 3. **Load** wallet with signing capability (`_get_wallet_with_signer`)
 4. **Sync** wallet via Esplora `full_scan` to get latest UTXOs
 5. **Build** PSBT with `TxBuilder`, set recipient and optional fee rate
@@ -350,7 +350,7 @@ Common error codes: `ValueError`, `INSUFFICIENT_FUNDS`, `Generic`.
    → { "txid": "abc123...", "amount": 50000 }
 
 4. btc_balance(wallet_name="default")  → { "balance_sats": 0, "balance_btc": 0 }
-   btc_send(wallet_name="default", address="bc1...", amount=10000, passphrase="...")
+   btc_send(wallet_name="default", address="bc1...", amount=10000, password="...")
    → { "txid": "...", "amount": 10000 }
 ```
 

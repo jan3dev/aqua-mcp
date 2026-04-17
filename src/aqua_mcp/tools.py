@@ -84,7 +84,7 @@ def lw_import_mnemonic(
     mnemonic: str,
     wallet_name: str = "default",
     network: str = "mainnet",
-    passphrase: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """
     Import a wallet from a BIP39 mnemonic. Creates both Liquid (LWK) and Bitcoin (BDK)
@@ -94,7 +94,10 @@ def lw_import_mnemonic(
         mnemonic: BIP39 mnemonic phrase
         wallet_name: Name for the wallet. Default: "default"
         network: "mainnet" or "testnet". Default: "mainnet"
-        passphrase: Optional passphrase to encrypt the mnemonic at rest
+        password: Optional password to encrypt the mnemonic at rest. NOT a BIP39
+            passphrase: the derived keys depend only on the mnemonic, so the
+            resulting descriptors match what other wallets (AQUA, Green, Jade)
+            produce for the same seed.
 
     Returns:
         wallet_name: Name of the created wallet
@@ -104,9 +107,9 @@ def lw_import_mnemonic(
         watch_only: False (this is a full wallet)
     """
     manager = get_manager()
-    wallet = manager.import_mnemonic(mnemonic, wallet_name, network, passphrase)
+    wallet = manager.import_mnemonic(mnemonic, wallet_name, network, password)
     btc_manager = get_btc_manager()
-    btc_manager.create_wallet(mnemonic, wallet_name, network, passphrase)
+    btc_manager.create_wallet(mnemonic, wallet_name, network)
     wallet_data = manager.storage.load_wallet(wallet_name)
     return {
         "wallet_name": wallet.name,
@@ -232,17 +235,17 @@ def lw_send(
     wallet_name: str,
     address: str,
     amount: int,
-    passphrase: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """
     Send L-BTC to an address.
-    
+
     Args:
         wallet_name: Name of the wallet
         address: Destination Liquid address
         amount: Amount in satoshis
-        passphrase: Passphrase to decrypt mnemonic (if encrypted)
-        
+        password: Password to decrypt mnemonic (if encrypted at rest)
+
     Returns:
         txid: Transaction ID
         amount: Amount sent
@@ -251,7 +254,7 @@ def lw_send(
     if amount <= 0:
         raise ValueError("Amount must be positive")
     manager = get_manager()
-    txid = manager.send(wallet_name, address, amount, passphrase=passphrase)
+    txid = manager.send(wallet_name, address, amount, password=password)
     return {
         "txid": txid,
         "amount": amount,
@@ -264,18 +267,18 @@ def lw_send_asset(
     address: str,
     amount: int,
     asset_id: str,
-    passphrase: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """
     Send a Liquid asset to an address.
-    
+
     Args:
         wallet_name: Name of the wallet
         address: Destination Liquid address
         amount: Amount in satoshis
         asset_id: Asset ID (hex string)
-        passphrase: Passphrase to decrypt mnemonic (if encrypted)
-        
+        password: Password to decrypt mnemonic (if encrypted at rest)
+
     Returns:
         txid: Transaction ID
         amount: Amount sent
@@ -285,7 +288,7 @@ def lw_send_asset(
     if amount <= 0:
         raise ValueError("Amount must be positive")
     manager = get_manager()
-    txid = manager.send(wallet_name, address, amount, asset_id, passphrase)
+    txid = manager.send(wallet_name, address, amount, asset_id, password)
     ticker = resolve_asset_name(asset_id)
     return {
         "txid": txid,
@@ -467,7 +470,7 @@ def btc_send(
     address: str,
     amount: int,
     fee_rate: int | None = None,
-    passphrase: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """
     Send BTC to an address.
@@ -477,7 +480,7 @@ def btc_send(
         address: Destination Bitcoin address (bc1...)
         amount: Amount in satoshis
         fee_rate: Optional fee rate in sat/vB. Default: let BDK choose
-        passphrase: Passphrase to decrypt mnemonic (if encrypted)
+        password: Password to decrypt mnemonic (if encrypted at rest)
 
     Returns:
         txid: Transaction ID
@@ -485,7 +488,7 @@ def btc_send(
         address: Destination address
     """
     btc = get_btc_manager()
-    txid = btc.send(wallet_name, address, amount, fee_rate, passphrase)
+    txid = btc.send(wallet_name, address, amount, fee_rate, password)
     return {
         "txid": txid,
         "amount": amount,
@@ -588,7 +591,7 @@ def delete_wallet(wallet_name: str) -> dict[str, Any]:
 def lightning_receive(
     amount: int,
     wallet_name: str = "default",
-    passphrase: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """Generate a Lightning invoice to receive L-BTC into a Liquid wallet.
 
@@ -597,13 +600,13 @@ def lightning_receive(
     Args:
         amount: Amount in satoshis (100 – 25,000,000)
         wallet_name: Liquid wallet to receive into. Default: "default"
-        passphrase: Passphrase to decrypt mnemonic (if encrypted)
+        password: Password to decrypt mnemonic (if encrypted at rest)
 
     Returns:
         swap_id, invoice, amount, wallet_name, message
     """
     manager = get_lightning_manager()
-    swap = manager.create_receive_invoice(amount, wallet_name, passphrase)
+    swap = manager.create_receive_invoice(amount, wallet_name, password)
 
     # Count wallets to inform user which one receives
     all_wallets = get_manager().storage.list_wallets()
@@ -625,7 +628,7 @@ def lightning_receive(
 def lightning_send(
     invoice: str,
     wallet_name: str = "default",
-    passphrase: str | None = None,
+    password: str | None = None,
 ) -> dict[str, Any]:
     """Pay a Lightning invoice using L-BTC from a Liquid wallet.
 
@@ -634,13 +637,13 @@ def lightning_send(
     Args:
         invoice: BOLT11 Lightning invoice (lnbc... or lntb...)
         wallet_name: Liquid wallet to pay from. Default: "default"
-        passphrase: Passphrase to decrypt mnemonic (if encrypted)
+        password: Password to decrypt mnemonic (if encrypted at rest)
 
     Returns:
         swap_id, lockup_txid, status, amount
     """
     manager = get_lightning_manager()
-    swap = manager.pay_invoice(invoice, wallet_name, passphrase)
+    swap = manager.pay_invoice(invoice, wallet_name, password)
 
     return {
         "swap_id": swap.swap_id,

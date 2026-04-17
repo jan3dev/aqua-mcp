@@ -57,9 +57,9 @@ TOOL_SCHEMAS = {
                     "enum": ["mainnet", "testnet"],
                     "default": "mainnet",
                 },
-                "passphrase": {
+                "password": {
                     "type": "string",
-                    "description": "Optional passphrase to encrypt the mnemonic at rest",
+                    "description": "Optional password to encrypt the mnemonic at rest (NOT a BIP39 passphrase)",
                 },
             },
             "required": ["mnemonic"],
@@ -166,9 +166,9 @@ TOOL_SCHEMAS = {
                     "type": "integer",
                     "description": "Amount in satoshis",
                 },
-                "passphrase": {
+                "password": {
                     "type": "string",
-                    "description": "Passphrase to decrypt mnemonic (if encrypted)",
+                    "description": "Password to decrypt mnemonic (if encrypted at rest)",
                 },
             },
             "required": ["wallet_name", "address", "amount"],
@@ -195,9 +195,9 @@ TOOL_SCHEMAS = {
                     "type": "string",
                     "description": "Asset ID (hex string)",
                 },
-                "passphrase": {
+                "password": {
                     "type": "string",
-                    "description": "Passphrase to decrypt mnemonic (if encrypted)",
+                    "description": "Password to decrypt mnemonic (if encrypted at rest)",
                 },
             },
             "required": ["wallet_name", "address", "amount", "asset_id"],
@@ -305,9 +305,9 @@ TOOL_SCHEMAS = {
                     "type": "integer",
                     "description": "Optional fee rate in sat/vB",
                 },
-                "passphrase": {
+                "password": {
                     "type": "string",
-                    "description": "Passphrase to decrypt mnemonic (if encrypted)",
+                    "description": "Password to decrypt mnemonic (if encrypted at rest)",
                 },
             },
             "required": ["wallet_name", "address", "amount"],
@@ -340,9 +340,9 @@ TOOL_SCHEMAS = {
                     "description": "Liquid wallet to receive into",
                     "default": "default",
                 },
-                "passphrase": {
+                "password": {
                     "type": "string",
-                    "description": "Passphrase to decrypt mnemonic (if encrypted)",
+                    "description": "Password to decrypt mnemonic (if encrypted at rest)",
                 },
             },
             "required": ["amount"],
@@ -362,9 +362,9 @@ TOOL_SCHEMAS = {
                     "description": "Liquid wallet to pay from",
                     "default": "default",
                 },
-                "passphrase": {
+                "password": {
                     "type": "string",
-                    "description": "Passphrase to decrypt mnemonic (if encrypted)",
+                    "description": "Password to decrypt mnemonic (if encrypted at rest)",
                 },
             },
             "required": ["invoice"],
@@ -396,20 +396,20 @@ STARTUP BEHAVIOR:
 - FIRST ACTION: Always check existing wallets with lw_list_wallets
 - Show user what wallets are already available locally
 - This prevents re-importing seeds every session
-- If wallet has passphrase, ask user for it when needed (signing transactions)
+- If wallet is encrypted with a password, ask user for it when needed (signing transactions)
 
 DEFAULTS:
 - Network: MAINNET (unless user explicitly requests testnet)
 - Balance queries: Use unified_balance (both networks) unless user specifies bitcoin or liquid only
-- New wallets: Generate with passphrase by default for security
-- Passphrase format: Use word-based passphrases like "Wild-red-dolphin-386" (memorable + secure)
+- New wallets: Encourage encrypting the mnemonic at rest with a strong password
+- Password format: Use memorable but strong passwords (e.g. "Wild-red-dolphin-386")
 
 CRITICAL SAFETY RULES:
 - Amounts are in SATOSHIS (1 BTC = 100,000,000 sats)
 - Always verify network: mainnet vs testnet
 - Confirm transactions before broadcasting
 - Show explorer links after sending
-- STRONGLY recommend passphrases for wallet security, but allow user choice
+- STRONGLY recommend encrypting the mnemonic with a password, but allow user choice
 
 NETWORK IDENTIFIERS:
 - Bitcoin mainnet: bc1... addresses
@@ -425,18 +425,23 @@ WORKFLOW:
 
 WHEN GENERATING NEW SEEDS:
 1. Generate mnemonic with lw_generate_mnemonic
-2. ASK user if they want to use a passphrase (STRONGLY RECOMMENDED)
-3. If yes: ASK user for their passphrase
+2. ASK user if they want to encrypt the mnemonic on disk with a password (STRONGLY RECOMMENDED)
+3. If yes: ASK user for their password
    - Give example: "Wild-red-dolphin-386" (Word1-word2-word3-###)
-   - Wait for user to provide their chosen passphrase
-4. Import wallet with mnemonic + user's passphrase (or no passphrase if declined)
-5. Show user the mnemonic (and remind them of their passphrase if used)
-6. Emphasize importance of backing up both securely
+   - Wait for user to provide their chosen password
+4. Import wallet with mnemonic + user's password (or no password if declined)
+5. Show user the mnemonic (and remind them of their password if used)
+6. Emphasize importance of backing up the mnemonic securely. The password only
+   protects the local file — it is NOT a BIP39 passphrase, so the mnemonic alone
+   is enough to restore the wallet in any other software.
 
-PASSPHRASE HANDLING:
-- Wallets with encrypted mnemonics require passphrase for signing
-- Ask user for passphrase when calling btc_send, lw_send, lw_send_asset, lightning_send
-- If operation fails with decryption error, wallet likely has passphrase
+PASSWORD HANDLING (encryption at rest):
+- Wallets with encrypted mnemonics require the password to decrypt for signing
+- Ask user for the password when calling btc_send, lw_send, lw_send_asset, lightning_send
+- If operation fails with decryption error, the wallet likely has a password
+- IMPORTANT: the password is NOT a BIP39 passphrase. It does not alter the
+  derived keys. The mnemonic alone fully restores the same descriptors on Liquid
+  and Bitcoin in any BIP39-compliant wallet.
 
 LIGHTNING:
 - Use lightning_receive to generate an invoice for receiving L-BTC from Lightning
@@ -448,7 +453,7 @@ LIGHTNING:
 WALLET DELETION:
 - ALWAYS use the delete_wallet prompt workflow (check balances, remind about seed backup, confirm)
 - NEVER call delete_wallet directly without first checking balances and getting user confirmation
-- Remind user to backup their mnemonic and passphrase before deletion""",
+- Remind user to backup their mnemonic before deletion""",
     )
 
     @server.list_prompts()
@@ -458,7 +463,7 @@ WALLET DELETION:
             # Wallet creation
             Prompt(
                 name="create_new_wallet",
-                description="Create a new wallet with mnemonic and passphrase",
+                description="Create a new wallet with mnemonic and optional at-rest password",
                 arguments=[
                     PromptArgument(name="wallet_name", description="Name for the wallet", required=False),
                     PromptArgument(name="network", description="mainnet or testnet", required=False),
@@ -584,17 +589,20 @@ WALLET DELETION:
 Please:
 1. Generate a new 12-word mnemonic with lw_generate_mnemonic
 2. Show me the mnemonic
-3. Ask me: "Do you want to use a passphrase? (STRONGLY RECOMMENDED for security)"
+3. Ask me: "Do you want to encrypt the mnemonic on disk with a password? (STRONGLY RECOMMENDED)"
+   - Clarify: this password protects the local file only. It is NOT a BIP39
+     passphrase, so the mnemonic alone restores the same addresses elsewhere.
 4. If I say yes:
-   - Ask me: "Please provide your passphrase. Example format: 'Wild-red-dolphin-386' (Word1-word2-word3-###)"
-   - Wait for me to give you my chosen passphrase
-   - Import wallet with my passphrase
+   - Ask me: "Please provide your password. Example format: 'Wild-red-dolphin-386' (Word1-word2-word3-###)"
+   - Wait for me to give you my chosen password
+   - Import wallet with my password
 5. If I say no:
-   - Warn me that the mnemonic will only be base64-encoded (less secure)
+   - Warn me that the mnemonic will only be base64-encoded (less secure at rest)
    - Ask for confirmation
-   - Import wallet without passphrase
+   - Import wallet without password
 6. Confirm wallet creation for both Bitcoin and Liquid
-7. Remind me to backup the mnemonic (and passphrase if used) securely
+7. Remind me to backup the mnemonic securely (losing the password only blocks
+   this local file — the mnemonic alone still restores my funds elsewhere)
 8. Generate a receive address for Bitcoin and another for Liquid""",
                 ),
             )])
@@ -608,9 +616,11 @@ Please:
 
 Please ask me:
 1. The mnemonic (12 or 24 words)
-2. If I want to use a passphrase (STRONGLY RECOMMENDED for security)
-   - If yes: ask for the passphrase
-   - If no: warn me it will be less secure (base64 only)
+2. If I want to encrypt the mnemonic on disk with a password (STRONGLY RECOMMENDED)
+   - If yes: ask for the password
+   - If no: warn me it will be less secure at rest (base64 only)
+   - Note: the password only protects the local file. It is NOT a BIP39
+     passphrase — derived addresses depend solely on the mnemonic.
 3. Network: mainnet or testnet (default: mainnet)
 4. Wallet name (default: '{wallet_name}')
 
@@ -713,7 +723,7 @@ Please:
    - Estimated fees
    - Destination address
 5. Ask for explicit confirmation
-6. If wallet has passphrase, ask me for it
+6. If wallet is password-encrypted, ask me for the password
 7. Send with btc_send
 8. Show txid and explorer link""",
                 ),
@@ -735,7 +745,7 @@ Please:
 3. Determine the correct asset_id
 4. Verify valid mainnet address
 5. Show summary BEFORE sending
-6. Ask for confirmation and passphrase if applicable
+6. Ask for confirmation and the encryption password if applicable
 7. Send with lw_send or lw_send_asset
 8. Show txid and explorer link""",
                 ),
@@ -772,7 +782,7 @@ Use lw_list_wallets and display in table format with:
 - Name
 - Network (mainnet/testnet)
 - Type (full/watch-only)
-- Whether it has passphrase (encrypted)""",
+- Whether the mnemonic is password-encrypted at rest""",
                 ),
             )])
 
@@ -803,7 +813,7 @@ Please follow this safety workflow:
 3. If there are any funds (BTC or L-BTC > 0):
    - WARN me clearly about the remaining funds
    - Show me exactly how much is in each network
-4. REMIND me: "Make sure you have backed up your seed phrase (mnemonic) and passphrase before proceeding. Without these, you will permanently lose access to any funds associated with this wallet."
+4. REMIND me: "Make sure you have backed up your seed phrase (mnemonic) before proceeding. Without it, you will permanently lose access to any funds associated with this wallet. The at-rest encryption password, if any, protects only this local file — the mnemonic alone is enough to restore funds elsewhere."
 5. Ask me for EXPLICIT confirmation: "Are you sure you want to delete wallet '{wallet_name}'? This cannot be undone."
 6. Only after I explicitly confirm, call delete_wallet with wallet_name='{wallet_name}'
 7. Confirm deletion was successful""",
@@ -870,12 +880,14 @@ Please:
 ## Creating a New Wallet (Recommended Method)
 
 1. Generate a mnemonic: `lw_generate_mnemonic()`
-2. Generate a strong passphrase (or let the system generate one)
-3. Import it: `lw_import_mnemonic(mnemonic="your 12 words", network="mainnet", passphrase="your-passphrase")`
+2. Choose a strong password to encrypt the mnemonic on disk
+3. Import it: `lw_import_mnemonic(mnemonic="your 12 words", network="mainnet", password="your-password")`
 4. This creates BOTH a Liquid and Bitcoin wallet from the same mnemonic
-5. **BACKUP BOTH**: Ask user to save mnemonic + passphrase securely offline
+5. **BACKUP THE MNEMONIC**: Save it securely offline. The password only protects
+   the local file — it is NOT a BIP39 passphrase, so the mnemonic alone is
+   enough to restore the same addresses in any BIP39-compliant wallet.
 
-## Creating Without Passphrase (Not Recommended)
+## Creating Without a Password (Not Recommended)
 
 If you need convenience over security:
 - `lw_import_mnemonic(mnemonic="your words", network="mainnet")`
@@ -898,11 +910,11 @@ If you need convenience over security:
 
 ## Sending Funds
 
-- Bitcoin: `btc_send(wallet_name="default", address="bc1...", amount=10000, passphrase="secret")`
-- Liquid (L-BTC): `lw_send(wallet_name="default", address="lq1...", amount=10000, passphrase="secret")`
+- Bitcoin: `btc_send(wallet_name="default", address="bc1...", amount=10000, password="secret")`
+- Liquid (L-BTC): `lw_send(wallet_name="default", address="lq1...", amount=10000, password="secret")`
 - Liquid (other assets): `lw_send_asset(..., asset_id="ce091c99...")`
 
-Note: If wallet has no passphrase, omit the passphrase parameter"""
+Note: If wallet mnemonic is not encrypted, omit the password parameter"""
 
         elif uri == "aqua://docs/networks":
             return """# Network Reference
@@ -948,7 +960,12 @@ Note: If wallet has no passphrase, omit the passphrase parameter"""
 
 ## ⚠️ IMPORTANT: Mnemonic Storage
 
-**Passphrase usage is STRONGLY RECOMMENDED but optional**:
+**At-rest encryption with a password is STRONGLY RECOMMENDED but optional**.
+
+The `password` parameter is used ONLY to encrypt the mnemonic on disk (PBKDF2 +
+Fernet). It is **NOT** a BIP39 passphrase: the derived Liquid and Bitcoin keys
+depend solely on the mnemonic, so the same mnemonic restores the same
+descriptors in any BIP39-compliant wallet (AQUA, Blockstream Green, Jade, etc.).
 
 ```python
 # ⚠️ NOT RECOMMENDED - stores mnemonic with base64 only (not encrypted)
@@ -958,25 +975,28 @@ lw_import_mnemonic(mnemonic="abandon abandon...")
 # ✅ RECOMMENDED - encrypts mnemonic on disk with strong encryption
 lw_import_mnemonic(
     mnemonic="abandon abandon...",
-    passphrase="strong-password-here"
+    password="strong-password-here"
 )
 ```
 
 **Trade-offs**:
-- **With passphrase**: Secure against malware/file access, but you must remember it
-- **Without passphrase**: Convenient but only protected by filesystem permissions (base64 encoding)
+- **With password**: Local file is secure against casual filesystem access, but
+  you must remember the password to sign transactions.
+- **Without password**: Convenient but only protected by filesystem permissions
+  (base64 encoding).
 
-## Passphrase Requirements
+## Password Requirements (encryption at rest)
 
 - **Strong**: Use 12+ characters, mix letters/numbers/symbols
 - **Unique**: Don't reuse passwords from other services
-- **Backed up**: Store securely offline (password manager, paper backup)
 - **Required for signing**: You'll need it every time you send funds
+- **NOT required for recovery**: Losing the password only blocks this local
+  file. The mnemonic alone still restores the wallet in any other software.
 
 ## Wallet Security Checklist
 
-- ✅ Always encrypt mnemonics with passphrases
-- ✅ Back up mnemonics offline (paper, metal, encrypted USB)
+- ✅ Always encrypt the local mnemonic with a password
+- ✅ Back up the mnemonic offline (paper, metal, encrypted USB)
 - ✅ Verify addresses before sending (double-check network)
 - ✅ Start with small test transactions
 - ✅ Use watch-only wallets for monitoring (export with `lw_export_descriptor`)
@@ -986,7 +1006,7 @@ lw_import_mnemonic(
 
 - ❌ Store mnemonics in cloud services (Dropbox, Google Drive)
 - ❌ Share mnemonics in chat/email/screenshots
-- ❌ Import wallets without passphrases
+- ❌ Leave mnemonics unencrypted on shared machines
 - ❌ Send mainnet funds to testnet addresses
 - ❌ Ignore address network prefixes
 
@@ -1001,8 +1021,7 @@ For monitoring without signing risk:
 ## Recovery
 
 If you have:
-- ✅ Mnemonic + passphrase → Full recovery possible
-- ✅ Mnemonic only (if stored plaintext) → Full recovery possible
+- ✅ Mnemonic (encrypted or plaintext) → Full recovery possible
 - ✅ Descriptor only → Watch-only monitoring
 - ❌ Nothing → **Funds are permanently lost**"""
 

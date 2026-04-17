@@ -102,12 +102,12 @@ class TestImportMnemonic:
         )
         assert result["network"] == "testnet"
 
-    def test_import_with_passphrase_encrypts(self, isolated_manager):
-        """When a passphrase is given the mnemonic is stored encrypted."""
+    def test_import_with_password_encrypts(self, isolated_manager):
+        """When a password is given the mnemonic is stored encrypted."""
         lw_import_mnemonic(
             mnemonic=TEST_MNEMONIC,
             wallet_name="enc_wallet",
-            passphrase="s3cret",
+            password="s3cret",
         )
 
         wallet = isolated_manager.storage.load_wallet("enc_wallet")
@@ -500,18 +500,18 @@ class TestSend:
         with pytest.raises(ValueError, match="Amount must be positive"):
             lw_send(wallet_name="neg_send", address=self.DEST_ADDRESS, amount=-100)
 
-    def test_send_without_passphrase_when_encrypted_raises(self):
-        """Encrypted wallet requires passphrase for send."""  # Significance: 4
+    def test_send_without_password_when_encrypted_raises(self):
+        """Encrypted wallet requires password for send."""  # Significance: 4
         lw_import_mnemonic(
             mnemonic=TEST_MNEMONIC,
             wallet_name="enc_send",
-            passphrase="pass123",
+            password="pass123",
         )
         manager = get_manager()
         # Clear cached signer to simulate fresh load
         manager._signers.pop("enc_send", None)
 
-        with pytest.raises(ValueError, match="[Pp]assphrase required"):
+        with pytest.raises(ValueError, match="[Pp]assword required"):
             lw_send(wallet_name="enc_send", address=self.DEST_ADDRESS, amount=100)
 
 
@@ -656,22 +656,22 @@ class TestWalletManagerInternals:
         lw_import_mnemonic(mnemonic=TEST_MNEMONIC, wallet_name="cache_test")
         assert "cache_test" in isolated_manager._signers
 
-    def test_load_wallet_with_passphrase_restores_signer(self, isolated_manager):
-        """Loading an encrypted wallet with passphrase restores the signer."""
+    def test_load_wallet_with_password_restores_signer(self, isolated_manager):
+        """Loading an encrypted wallet with the correct password restores the signer."""
         lw_import_mnemonic(
             mnemonic=TEST_MNEMONIC,
             wallet_name="restore_test",
-            passphrase="mypass",
+            password="mypass",
         )
         # Clear cache to simulate restart
         isolated_manager._signers.pop("restore_test", None)
         assert "restore_test" not in isolated_manager._signers
 
-        isolated_manager.load_wallet("restore_test", passphrase="mypass")
+        isolated_manager.load_wallet("restore_test", password="mypass")
         assert "restore_test" in isolated_manager._signers
 
-    def test_send_no_passphrase_uses_plaintext_mnemonic(self, isolated_manager):
-        """Wallet imported without passphrase stores mnemonic as plaintext and can sign."""
+    def test_send_no_password_uses_plaintext_mnemonic(self, isolated_manager):
+        """Wallet imported without password stores mnemonic as plaintext and can sign."""
         lw_import_mnemonic(mnemonic=TEST_MNEMONIC, wallet_name="no_sign")
         isolated_manager._signers.pop("no_sign", None)
         wallet = isolated_manager.storage.load_wallet("no_sign")

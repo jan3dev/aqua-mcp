@@ -76,7 +76,7 @@ class LightningManager:
         self,
         amount: int,
         wallet_name: str = "default",
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> LightningSwap:
         """
         Generate a Lightning invoice to receive funds.
@@ -84,7 +84,7 @@ class LightningManager:
         Args:
             amount: Amount in satoshis (100 – 25,000,000)
             wallet_name: Liquid wallet to receive into
-            passphrase: Passphrase to decrypt mnemonic (if encrypted)
+            password: Password to decrypt mnemonic (if encrypted at rest)
 
         Returns:
             LightningSwap with pending status
@@ -106,8 +106,8 @@ class LightningManager:
         if wallet_data.encrypted_mnemonic and self.storage.is_mnemonic_encrypted(
             wallet_data.encrypted_mnemonic
         ):
-            if not passphrase:
-                raise ValueError("Passphrase required to decrypt mnemonic")
+            if not password:
+                raise ValueError("Password required to decrypt mnemonic")
 
         addr = self.wallet_manager.get_address(wallet_name)
         address = addr.address
@@ -138,7 +138,7 @@ class LightningManager:
         self,
         invoice: str,
         wallet_name: str = "default",
-        passphrase: Optional[str] = None,
+        password: Optional[str] = None,
     ) -> LightningSwap:
         """
         Pay a Lightning invoice using L-BTC via Boltz submarine swap.
@@ -146,7 +146,7 @@ class LightningManager:
         Args:
             invoice: BOLT11 Lightning invoice (lnbc... or lntb...)
             wallet_name: Liquid wallet to pay from
-            passphrase: Passphrase to decrypt mnemonic (if encrypted)
+            password: Password to decrypt mnemonic (if encrypted at rest)
 
         Returns:
             LightningSwap with pending status and lockup_txid
@@ -165,8 +165,8 @@ class LightningManager:
         if wallet_data.encrypted_mnemonic and self.storage.is_mnemonic_encrypted(
             wallet_data.encrypted_mnemonic
         ):
-            if not passphrase:
-                raise ValueError("Passphrase required to decrypt mnemonic")
+            if not password:
+                raise ValueError("Password required to decrypt mnemonic")
 
         network = wallet_data.network
 
@@ -214,7 +214,7 @@ class LightningManager:
         self.storage.save_lightning_swap(swap)
 
         lockup_txid = self.wallet_manager.send(
-            wallet_name, swap_resp["address"], expected_amount, passphrase=passphrase
+            wallet_name, swap_resp["address"], expected_amount, password=password
         )
 
         swap.lockup_txid = lockup_txid
@@ -241,13 +241,11 @@ class LightningManager:
 
         client = AnkaraClient()
         warning = None
+        claim_warning = None
         try:
             verify_resp = client.verify_swap(swap_id)
             settled = verify_resp.get("settled", False)
             preimage = verify_resp.get("preimage")
-
-            # Auto-claim if settled and not already completed
-            claim_warning = None
             if settled and swap.status != "completed":
                 try:
                     client.claim_swap(swap_id)
@@ -255,8 +253,15 @@ class LightningManager:
                     if preimage:
                         swap.preimage = preimage
                     self.storage.save_lightning_swap(swap)
-                except Exception as e:
-                    claim_warning = f"Swap settled but claim failed: {e}"
+                except RuntimeError as e:
+                    err_msg = str(e)
+                    if "409" in err_msg or "already been claimed" in err_msg.lower():
+                        swap.status = "completed"
+                        if preimage:
+                            swap.preimage = preimage
+                        self.storage.save_lightning_swap(swap)
+                    else:
+                        claim_warning = f"Swap settled but claim failed: {e}"
         except Exception as e:
             warning = f"Could not fetch remote status: {e}"
             verify_resp = {}
@@ -273,7 +278,7 @@ class LightningManager:
             result["preimage"] = swap.preimage
         if warning:
             result["warning"] = warning
-        if "claim_warning" in locals() and claim_warning:
+        if claim_warning:
             result["claim_warning"] = claim_warning
 
         return result
