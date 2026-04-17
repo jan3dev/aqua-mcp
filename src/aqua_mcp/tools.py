@@ -10,8 +10,6 @@ from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
-logger = logging.getLogger(__name__)
-
 from .assets import resolve_asset_name
 from .bitcoin import BitcoinWalletManager
 from .wallet import WalletManager
