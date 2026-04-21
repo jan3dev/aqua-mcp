@@ -23,7 +23,7 @@ SIGNER_MNEMONIC=${SIGNER_MNEMONIC}
 ```
 
 **Expected behavior:**
-- Wallet is imported (or already exists) with name `default`
+- Wallet is imported (or already exists) with name `prompt_wallet_<DATETIME>`
 - `unified_balance` returns balances for both Bitcoin and Liquid networks
 - Both L-BTC and BTC balances are displayed
 
@@ -38,7 +38,7 @@ Give me a Liquid address and a Bitcoin on-chain address to receive funds.
 **Expected behavior:**
 - Liquid address starts with `lq1...` (mainnet) or `tex1...` / `tlq1...` (testnet)
 - Bitcoin address starts with `bc1...` (mainnet) or `tb1...` (testnet)
-- Both addresses belong to the `default` wallet
+- Both addresses belong to the `prompt_wallet_<DATETIME>` wallet
 
 ---
 
