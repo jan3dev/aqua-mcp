@@ -2,6 +2,8 @@
 
 import click
 
+from ..assets import MAINNET_ASSETS, TESTNET_ASSETS, lookup_asset_by_ticker
+from ..storage import Storage
 from ..tools import (
     lw_address,
     lw_balance,
@@ -65,17 +67,62 @@ def send(ctx, wallet_name, address, amount, password):
 @click.option("--wallet-name", required=True, help="Name of the wallet.")
 @click.option("--address", required=True, help="Destination Liquid address.")
 @click.option("--amount", required=True, type=int, help="Amount in satoshis.")
-@click.option("--asset-id", required=True, help="Asset ID (hex string).")
+@click.option("--asset-id", default=None, help="Asset ID (hex string).")
+@click.option(
+    "--asset-ticker",
+    default=None,
+    help="Asset ticker (case-insensitive, e.g. USDt, DePix). Resolved via the known-assets registry.",
+)
 @click.option("--password", default=None, help="Password to decrypt mnemonic.")
 @click.pass_obj
-def send_asset(ctx, wallet_name, address, amount, asset_id, password):
+def send_asset(ctx, wallet_name, address, amount, asset_id, asset_ticker, password):
     """Send a Liquid asset to an address."""
+    if bool(asset_id) == bool(asset_ticker):
+        raise click.UsageError("Provide exactly one of --asset-id or --asset-ticker.")
+    if asset_ticker:
+        wallet_data = Storage().load_wallet(wallet_name)
+        if wallet_data is None:
+            raise click.UsageError(f"Wallet '{wallet_name}' not found.")
+        info = lookup_asset_by_ticker(asset_ticker, wallet_data.network)
+        if info is None:
+            raise click.UsageError(
+                f"Unknown ticker '{asset_ticker}' on {wallet_data.network}. "
+                "Run 'aqua-cli liquid assets' to list known tickers."
+            )
+        asset_id = info.asset_id
     run_tool(ctx, lambda: handle_password_retry(
         lw_send_asset,
         {"wallet_name": wallet_name, "address": address,
          "amount": amount, "asset_id": asset_id,
          "password": password},
     ))
+
+
+@liquid.command("assets")
+@click.option(
+    "--network",
+    type=click.Choice(["mainnet", "testnet"]),
+    default="mainnet",
+    show_default=True,
+    help="Network registry to list.",
+)
+@click.pass_obj
+def assets(ctx, network):
+    """List known Liquid assets (asset_id, ticker, name, precision)."""
+    registry = MAINNET_ASSETS if network == "mainnet" else TESTNET_ASSETS
+    run_tool(ctx, lambda: {
+        "network": network,
+        "count": len(registry),
+        "assets": [
+            {
+                "asset_id": info.asset_id,
+                "ticker": info.ticker,
+                "name": info.name,
+                "precision": info.precision,
+            }
+            for info in registry.values()
+        ],
+    })
 
 
 @liquid.command("tx-status")
