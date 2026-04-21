@@ -78,3 +78,13 @@ def resolve_asset_name(asset_id: str, network: str = "mainnet") -> str:
     if info:
         return info.ticker
     return asset_id[:8] + "..."
+
+
+def lookup_asset_by_ticker(ticker: str, network: str = "mainnet") -> Optional[AssetInfo]:
+    """Look up asset metadata by ticker (case-insensitive). Returns None if unknown."""
+    registry = MAINNET_ASSETS if network == "mainnet" else TESTNET_ASSETS
+    target = ticker.lower()
+    for info in registry.values():
+        if info.ticker.lower() == target:
+            return info
+    return None
