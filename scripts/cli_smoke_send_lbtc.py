@@ -22,6 +22,7 @@ from aqua_mcp.cli.main import cli
 MNEMONIC = os.getenv("SIGNER_MNEMONIC")
 DEST_ADDRESS = os.getenv("LIQUID_DEST_ADDRESS")
 SEND_AMOUNT = 500  # sats
+USDT_SEND_SATS = 50_000_000  # 0.5 USDt (precision 8)
 
 if not MNEMONIC or not DEST_ADDRESS:
     print("ERROR: Set SIGNER_MNEMONIC and LIQUID_DEST_ADDRESS in .env")
@@ -138,6 +139,42 @@ def test_tx_history():
         print(f"  Latest txid: {latest.get('txid', 'N/A')}")
 
 test("5. View Transaction History", test_tx_history)
+
+
+# 6. Send 0.5 USDt to self via --asset-ticker
+
+
+def test_send_usdt_by_ticker():
+    """Send 0.5 USDt to a fresh self-address using --asset-ticker."""
+    balance = run_cli("liquid", "balance", "--wallet-name", WALLET)
+    assert balance is not None, "Balance check failed"
+    usdt_sats = 0
+    for b in balance["balances"]:
+        if b.get("ticker", "").lower() == "usdt":
+            usdt_sats = b.get("amount_sats", b.get("value", 0))
+    print(f"  USDt balance: {usdt_sats} sats")
+    if usdt_sats < USDT_SEND_SATS:
+        print(f"  SKIP: wallet holds {usdt_sats} sats USDt, needs >= {USDT_SEND_SATS}")
+        return
+
+    self_addr = run_cli("liquid", "address", "--wallet-name", WALLET)
+    assert self_addr is not None, "Could not derive receive address"
+    dest = self_addr["address"]
+    print(f"  Self-send destination: {dest}")
+
+    result = run_cli(
+        "liquid", "send-asset",
+        "--wallet-name", WALLET,
+        "--address", dest,
+        "--amount", str(USDT_SEND_SATS),
+        "--asset-ticker", "usdt",
+    )
+    assert result is not None, "send-asset via --asset-ticker failed"
+    assert "txid" in result, f"No txid in response: {result}"
+    assert len(result["txid"]) == 64, f"Invalid txid length: {len(result['txid'])}"
+    print(f"  Sent 0.5 USDt, TXID: {result['txid']}")
+
+test("6. Send 0.5 USDt by ticker", test_send_usdt_by_ticker)
 
 
 # Cleanup
