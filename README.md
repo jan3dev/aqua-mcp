@@ -15,6 +15,12 @@ MCP server for managing **Liquid Network** and **Bitcoin** wallets through AI as
 
 ## Installation
 
+> **Quickest way:** just ask your AI agent directly:
+>
+> ```
+> Install this MCP server: https://github.com/jan3dev/aqua-mcp
+> ```
+
 ### Recommended (uvx)
 
 If you don't have `uvx` installed:
