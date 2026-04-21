@@ -10,6 +10,7 @@ from dotenv import load_dotenv
 _project_root = Path(__file__).resolve().parent.parent.parent.parent
 load_dotenv(_project_root / ".env")
 
+from .commands import register_commands  # noqa: E402
 # Default to WARNING so tool-level INFO logs don't spam stderr in CLI mode
 logging.basicConfig(level=logging.WARNING, format="%(levelname)s: %(message)s")
 
@@ -40,8 +41,5 @@ def cli(ctx, fmt, verbose):
     if verbose:
         logging.getLogger().setLevel(logging.INFO)
 
-
-# Import and register subcommands
-from .commands import register_commands  # noqa: E402
 
 register_commands(cli)
