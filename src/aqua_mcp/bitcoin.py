@@ -1,8 +1,9 @@
 """Bitcoin wallet management using BDK."""
 
+import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+from typing import Callable, Optional, TypeVar
 
 import bdkpython as bdk
 
@@ -10,12 +11,49 @@ from .storage import Storage, WalletData
 
 
 ESPLORA_URLS = {
-    "mainnet": "https://blockstream.info/api",
-    "testnet": "https://blockstream.info/testnet/api",
+    "mainnet": [
+        "https://blockstream.info/api",
+        "https://mempool.space/api",
+    ],
+    "testnet": [
+        "https://blockstream.info/testnet/api",
+        "https://mempool.space/testnet/api",
+    ],
 }
 
 STOP_GAP = 20
 PARALLEL_REQUESTS = 3
+MAX_RETRIES = 3
+RETRY_DELAY_SECONDS = 1.0
+
+_T = TypeVar("_T")
+
+
+def _retry_on_network_error(fn: Callable[[], _T]) -> _T:
+    """Retry a network call on transient Esplora failures (connection reset, timeouts).
+
+    Blockstream's public Esplora occasionally drops connections mid-scan when
+    BDK fires many parallel requests. We retry with a short delay before giving up.
+    """
+    last_exc: Optional[Exception] = None
+    for attempt in range(MAX_RETRIES):
+        try:
+            return fn()
+        except Exception as exc:
+            msg = str(exc).lower()
+            transient = (
+                "connection reset" in msg
+                or "timed out" in msg
+                or "timeout" in msg
+                or "minreq" in msg
+            )
+            if not transient:
+                raise
+            last_exc = exc
+            if attempt < MAX_RETRIES - 1:
+                time.sleep(RETRY_DELAY_SECONDS)
+    assert last_exc is not None
+    raise last_exc
 
 
 @dataclass
@@ -84,16 +122,19 @@ class BitcoinWalletManager:
         self._wallets: dict[str, bdk.Wallet] = {}
         self._persisters: dict[str, bdk.Persister] = {}
         self._networks: dict[str, str] = {}
-        self._clients: dict[str, bdk.EsploraClient] = {}
+        self._clients: dict[str, list[bdk.EsploraClient]] = {}
 
-    def _get_esplora_url(self, network: str) -> str:
+    def _get_esplora_urls(self, network: str) -> list[str]:
         return ESPLORA_URLS.get(network) or ESPLORA_URLS["mainnet"]
 
-    def _get_client(self, network: str) -> bdk.EsploraClient:
+    def _get_clients(self, network: str) -> list[bdk.EsploraClient]:
         if network not in self._clients:
-            url = self._get_esplora_url(network)
-            self._clients[network] = bdk.EsploraClient(url)
+            urls = self._get_esplora_urls(network)
+            self._clients[network] = [bdk.EsploraClient(u) for u in urls]
         return self._clients[network]
+
+    def _get_client(self, network: str) -> bdk.EsploraClient:
+        return self._get_clients(network)[0]
 
     def _get_btc_cache_path(self, wallet_name: str) -> Path:
         base = self.storage.get_cache_path(wallet_name)
@@ -214,12 +255,25 @@ class BitcoinWalletManager:
     def sync_wallet(self, wallet_name: str) -> None:
         """Sync wallet with blockchain via Esplora."""
         wallet, network = self._get_wallet(wallet_name)
-        client = self._get_client(network)
-        request = wallet.start_full_scan().build()
-        update = client.full_scan(request, STOP_GAP, PARALLEL_REQUESTS)
-        wallet.apply_update(update)
-        persister = self._persisters[wallet_name]
-        wallet.persist(persister)
+        clients = self._get_clients(network)
+
+        last_exc: Optional[Exception] = None
+        for client in clients:
+            def _scan(c=client):
+                request = wallet.start_full_scan().build()
+                return c.full_scan(request, STOP_GAP, PARALLEL_REQUESTS)
+
+            try:
+                update = _retry_on_network_error(_scan)
+                wallet.apply_update(update)
+                persister = self._persisters[wallet_name]
+                wallet.persist(persister)
+                return
+            except Exception as exc:
+                last_exc = exc
+                continue
+        assert last_exc is not None
+        raise last_exc
 
     def get_balance(self, wallet_name: str) -> int:
         """Get Bitcoin balance in satoshis."""
@@ -339,5 +393,5 @@ class BitcoinWalletManager:
             raise RuntimeError("Failed to finalize PSBT")
         tx = psbt.extract_tx()
         client = self._get_client(network)
-        client.broadcast(tx)
+        _retry_on_network_error(lambda: client.broadcast(tx))
         return tx.compute_txid().serialize()[::-1].hex()
