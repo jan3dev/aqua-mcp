@@ -56,10 +56,6 @@ def test(name, fn):
         print(f"  FAIL: {e}")
 
 
-# ---------------------------------------------------------------------------
-# 1. Import Wallet and Check Balance
-# ---------------------------------------------------------------------------
-
 def test_import_and_balance():
     result = run_cli(
         "wallet", "import-mnemonic",
@@ -84,10 +80,6 @@ def test_import_and_balance():
 
 test("1. Import Wallet and Check L-BTC Balance", test_import_and_balance)
 
-# ---------------------------------------------------------------------------
-# 2. Send L-BTC
-# ---------------------------------------------------------------------------
-
 txid = None
 
 def test_send_lbtc():
@@ -106,9 +98,9 @@ def test_send_lbtc():
 
 test("2. Send L-BTC", test_send_lbtc)
 
-# ---------------------------------------------------------------------------
+
 # 3. Check Transaction Status
-# ---------------------------------------------------------------------------
+
 
 def test_tx_status():
     assert txid is not None, "No txid from send test"
@@ -120,9 +112,9 @@ def test_tx_status():
 
 test("3. Check Transaction Status", test_tx_status)
 
-# ---------------------------------------------------------------------------
+
 # 4. Verify Updated Balance
-# ---------------------------------------------------------------------------
+
 
 def test_updated_balance():
     balance = run_cli("liquid", "balance", "--wallet-name", WALLET)
@@ -133,9 +125,9 @@ def test_updated_balance():
 
 test("4. Verify Updated Balance", test_updated_balance)
 
-# ---------------------------------------------------------------------------
+
 # 5. View Transaction History
-# ---------------------------------------------------------------------------
+
 
 def test_tx_history():
     result = run_cli("liquid", "transactions", "--wallet-name", WALLET)
@@ -147,18 +139,18 @@ def test_tx_history():
 
 test("5. View Transaction History", test_tx_history)
 
-# ---------------------------------------------------------------------------
+
 # Cleanup
-# ---------------------------------------------------------------------------
+
 
 print(f"\n{'='*60}")
 print("CLEANUP: Deleting smoke wallet")
 run_cli("wallet", "delete", "--wallet-name", WALLET, "--yes")
 print(f"  Wallet '{WALLET}' deleted")
 
-# ---------------------------------------------------------------------------
+
 # Summary
-# ---------------------------------------------------------------------------
+
 
 print(f"\n{'='*60}")
 print(f"RESULTS: {passed} passed, {failed} failed out of {passed + failed}")

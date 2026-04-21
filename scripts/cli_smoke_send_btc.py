@@ -56,10 +56,6 @@ def test(name, fn):
         print(f"  FAIL: {e}")
 
 
-# ---------------------------------------------------------------------------
-# 1. Import Wallet and Check Balance
-# ---------------------------------------------------------------------------
-
 def test_import_and_balance():
     result = run_cli(
         "wallet", "import-mnemonic",
@@ -79,10 +75,6 @@ def test_import_and_balance():
 
 test("1. Import Wallet and Check BTC Balance", test_import_and_balance)
 
-# ---------------------------------------------------------------------------
-# 2. Send BTC On-Chain
-# ---------------------------------------------------------------------------
-
 txid = None
 
 def test_send_btc():
@@ -101,9 +93,9 @@ def test_send_btc():
 
 test("2. Send BTC On-Chain", test_send_btc)
 
-# ---------------------------------------------------------------------------
+
 # 3. Verify Updated Balance
-# ---------------------------------------------------------------------------
+
 
 def test_updated_balance():
     balance = run_cli("btc", "balance", "--wallet-name", WALLET)
@@ -112,9 +104,9 @@ def test_updated_balance():
 
 test("3. Verify Updated Balance", test_updated_balance)
 
-# ---------------------------------------------------------------------------
+
 # 4. View Transaction History
-# ---------------------------------------------------------------------------
+
 
 def test_tx_history():
     result = run_cli("btc", "transactions", "--wallet-name", WALLET)
@@ -126,18 +118,18 @@ def test_tx_history():
 
 test("4. View Transaction History", test_tx_history)
 
-# ---------------------------------------------------------------------------
+
 # Cleanup
-# ---------------------------------------------------------------------------
+
 
 print(f"\n{'='*60}")
 print("CLEANUP: Deleting smoke wallet")
 run_cli("wallet", "delete", "--wallet-name", WALLET, "--yes")
 print(f"  Wallet '{WALLET}' deleted")
 
-# ---------------------------------------------------------------------------
+
 # Summary
-# ---------------------------------------------------------------------------
+
 
 print(f"\n{'='*60}")
 print(f"RESULTS: {passed} passed, {failed} failed out of {passed + failed}")

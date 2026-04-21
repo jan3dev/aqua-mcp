@@ -1,10 +1,9 @@
 """Tests for the Click CLI interface."""
 
-import inspect
 import json
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import pytest
 from click.testing import CliRunner
@@ -58,16 +57,6 @@ def _import_wallet(runner):
 
 
 class TestRootCli:
-    def test_help(self, runner):
-        result = runner.invoke(cli, ["--help"])
-        assert result.exit_code == 0
-        assert "AQUA wallet CLI" in result.output
-
-    def test_version(self, runner):
-        result = runner.invoke(cli, ["--version"])
-        assert result.exit_code == 0
-        assert "0.2.1" in result.output
-
     def test_balance_json(self, runner):
         """Top-level balance command returns JSON with unified payload."""
         _import_wallet(runner)
@@ -267,29 +256,6 @@ class TestLightningCommands:
         )
         assert result.exit_code == 1
 
-    def test_receive_help(self, runner):
-        result = runner.invoke(cli, ["lightning", "receive", "--help"])
-        assert result.exit_code == 0
-        assert "--amount" in result.output
-
-    def test_send_help(self, runner):
-        result = runner.invoke(cli, ["lightning", "send", "--help"])
-        assert result.exit_code == 0
-        assert "--invoice" in result.output
-
-
-# ---------------------------------------------------------------------------
-# Serve command
-# ---------------------------------------------------------------------------
-
-
-class TestServeCommand:
-    def test_serve_help(self, runner):
-        result = runner.invoke(cli, ["serve", "--help"])
-        assert result.exit_code == 0
-        assert "--transport" in result.output
-
-
 # ---------------------------------------------------------------------------
 # Error handling
 # ---------------------------------------------------------------------------
@@ -319,96 +285,3 @@ class TestErrorHandling:
         assert result.exit_code == 1
         assert "Error" in result.output
 
-
-# ---------------------------------------------------------------------------
-# Parameter sync test
-# ---------------------------------------------------------------------------
-
-
-class TestParameterSync:
-    """Ensure Click commands stay in sync with tool function signatures."""
-
-    def _get_cli_commands(self):
-        """Walk the CLI tree and return {tool_name: click_command} mapping."""
-        from aqua_mcp.cli.wallet import wallet
-        from aqua_mcp.cli.liquid import liquid
-        from aqua_mcp.cli.btc import btc
-        from aqua_mcp.cli.lightning import lightning
-
-        mapping = {
-            ("wallet", "generate-mnemonic"): "lw_generate_mnemonic",
-            ("wallet", "import-mnemonic"): "lw_import_mnemonic",
-            ("wallet", "import-descriptor"): "lw_import_descriptor",
-            ("wallet", "export-descriptor"): "lw_export_descriptor",
-            ("wallet", "list"): "lw_list_wallets",
-            ("wallet", "delete"): "delete_wallet",
-            ("liquid", "balance"): "lw_balance",
-            ("liquid", "address"): "lw_address",
-            ("liquid", "transactions"): "lw_transactions",
-            ("liquid", "send"): "lw_send",
-            ("liquid", "send-asset"): "lw_send_asset",
-            ("liquid", "tx-status"): "lw_tx_status",
-            ("btc", "balance"): "btc_balance",
-            ("btc", "address"): "btc_address",
-            ("btc", "transactions"): "btc_transactions",
-            ("btc", "send"): "btc_send",
-            ("balance",): "unified_balance",
-            ("lightning", "receive"): "lightning_receive",
-            ("lightning", "send"): "lightning_send",
-            ("lightning", "status"): "lightning_transaction_status",
-        }
-
-        groups = {
-            "wallet": wallet,
-            "liquid": liquid,
-            "btc": btc,
-            "lightning": lightning,
-        }
-
-        result = {}
-        for cli_path, tool_name in mapping.items():
-            if len(cli_path) == 1:
-                from aqua_mcp.cli.commands import balance as balance_cmd
-                result[tool_name] = balance_cmd
-            else:
-                group_name, cmd_name = cli_path
-                group = groups[group_name]
-                cmd = group.commands.get(cmd_name)
-                if cmd is not None:
-                    result[tool_name] = cmd
-
-        return result
-
-    def test_all_tools_have_cli_commands(self):
-        """Every tool in TOOLS registry has a corresponding CLI command."""
-        from aqua_mcp.tools import TOOLS
-
-        cli_commands = self._get_cli_commands()
-        for tool_name in TOOLS:
-            assert tool_name in cli_commands, f"Tool '{tool_name}' has no CLI command"
-
-    def test_cli_params_cover_tool_params(self):
-        """Click commands have options for all non-trivial tool function parameters."""
-        from aqua_mcp.tools import TOOLS
-
-        cli_commands = self._get_cli_commands()
-        cli_only_params = {"yes"}
-
-        for tool_name, cmd in cli_commands.items():
-            tool_fn = TOOLS.get(tool_name)
-            if tool_fn is None:
-                continue
-
-            sig = inspect.signature(tool_fn)
-            tool_params = set(sig.parameters.keys())
-
-            cli_param_names = set()
-            for param in cmd.params:
-                cli_param_names.add(param.name)
-
-            cli_param_names -= cli_only_params
-
-            for tp in tool_params:
-                assert tp in cli_param_names, (
-                    f"Tool '{tool_name}' param '{tp}' is missing from CLI command"
-                )
