@@ -10,7 +10,7 @@ from datetime import datetime, UTC
 
 logger = logging.getLogger(__name__)
 
-from .assets import resolve_asset_name
+from .assets import MAINNET_ASSETS, TESTNET_ASSETS, resolve_asset_name
 from .bitcoin import BitcoinWalletManager
 from .wallet import WalletManager
 
@@ -539,7 +539,7 @@ def unified_balance(wallet_name: str = "default") -> dict[str, Any]:
 def lw_list_wallets() -> dict[str, Any]:
     """
     List all wallets.
-    
+
     Returns:
         wallets: List of wallet names
         count: Number of wallets
@@ -549,6 +549,39 @@ def lw_list_wallets() -> dict[str, Any]:
     return {
         "wallets": wallets,
         "count": len(wallets),
+    }
+
+
+def lw_list_assets(network: str = "mainnet") -> dict[str, Any]:
+    """
+    List known Liquid assets with their asset_id, ticker, name, and precision.
+
+    Use this to discover asset IDs for lw_send_asset without needing a prior
+    balance query. Tickers are the display name (e.g. "USDt", "DePix").
+
+    Args:
+        network: "mainnet" or "testnet". Default: "mainnet"
+
+    Returns:
+        network: Which registry was queried
+        count: Number of known assets
+        assets: List of {asset_id, ticker, name, precision}
+    """
+    if network not in ("mainnet", "testnet"):
+        raise ValueError(f"Unknown network: {network}")
+    registry = MAINNET_ASSETS if network == "mainnet" else TESTNET_ASSETS
+    return {
+        "network": network,
+        "count": len(registry),
+        "assets": [
+            {
+                "asset_id": info.asset_id,
+                "ticker": info.ticker,
+                "name": info.name,
+                "precision": info.precision,
+            }
+            for info in registry.values()
+        ],
     }
 
 
@@ -682,6 +715,7 @@ TOOLS = {
     "lw_send_asset": lw_send_asset,
     "lw_tx_status": lw_tx_status,
     "lw_list_wallets": lw_list_wallets,
+    "lw_list_assets": lw_list_assets,
     "delete_wallet": delete_wallet,
     "btc_balance": btc_balance,
     "btc_address": btc_address,

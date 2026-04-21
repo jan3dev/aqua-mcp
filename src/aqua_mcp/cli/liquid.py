@@ -3,8 +3,8 @@
 import click
 
 from ..assets import MAINNET_ASSETS, TESTNET_ASSETS, lookup_asset_by_ticker
-from ..storage import Storage
 from ..tools import (
+    get_manager,
     lw_address,
     lw_balance,
     lw_send,
@@ -71,7 +71,7 @@ def send(ctx, wallet_name, address, amount, password):
 @click.option(
     "--asset-ticker",
     default=None,
-    help="Asset ticker (case-insensitive, e.g. USDt, DePix). Resolved via the known-assets registry.",
+    help="Asset ticker (case-insensitive, e.g. USDt, DePix). Resolved via the registry.",
 )
 @click.option("--password", default=None, help="Password to decrypt mnemonic.")
 @click.pass_obj
@@ -80,7 +80,7 @@ def send_asset(ctx, wallet_name, address, amount, asset_id, asset_ticker, passwo
     if bool(asset_id) == bool(asset_ticker):
         raise click.UsageError("Provide exactly one of --asset-id or --asset-ticker.")
     if asset_ticker:
-        wallet_data = Storage().load_wallet(wallet_name)
+        wallet_data = get_manager().storage.load_wallet(wallet_name)
         if wallet_data is None:
             raise click.UsageError(f"Wallet '{wallet_name}' not found.")
         info = lookup_asset_by_ticker(asset_ticker, wallet_data.network)

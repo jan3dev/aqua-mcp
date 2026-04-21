@@ -223,6 +223,23 @@ TOOL_SCHEMAS = {
             "properties": {},
         },
     },
+    "lw_list_assets": {
+        "description": (
+            "List known Liquid assets (asset_id, ticker, name, precision). "
+            "Use this to resolve asset IDs for lw_send_asset without a prior balance query."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "network": {
+                    "type": "string",
+                    "enum": ["mainnet", "testnet"],
+                    "description": "Which asset registry to list",
+                    "default": "mainnet",
+                },
+            },
+        },
+    },
     "delete_wallet": {
         "description": "Delete a wallet and all its cached data. IMPORTANT: The agent MUST check balances and ask for user confirmation before calling this tool. Use the 'delete_wallet' prompt for the safe workflow.",
         "inputSchema": {
