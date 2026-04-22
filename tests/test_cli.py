@@ -51,9 +51,8 @@ def _import_wallet(runner):
     runner.invoke(cli, ["wallet", "import-mnemonic", "--mnemonic", TEST_MNEMONIC])
 
 
-# ---------------------------------------------------------------------------
+
 # Root CLI
-# ---------------------------------------------------------------------------
 
 
 class TestRootCli:
@@ -75,9 +74,7 @@ class TestRootCli:
             json.loads(result.output)
 
 
-# ---------------------------------------------------------------------------
 # Wallet commands
-# ---------------------------------------------------------------------------
 
 
 class TestWalletCommands:
@@ -178,10 +175,7 @@ class TestWalletCommands:
         assert "error" in result.output.lower() or "not found" in result.output.lower()
 
 
-# ---------------------------------------------------------------------------
 # Liquid commands
-# ---------------------------------------------------------------------------
-
 
 class TestLiquidCommands:
     def test_balance(self, runner):
@@ -262,10 +256,7 @@ class TestLiquidCommands:
         assert "unknown ticker" in result.output.lower()
 
 
-# ---------------------------------------------------------------------------
 # BTC commands
-# ---------------------------------------------------------------------------
-
 
 class TestBtcCommands:
     def test_balance(self, runner):
@@ -290,10 +281,7 @@ class TestBtcCommands:
         assert "transactions" in data
 
 
-# ---------------------------------------------------------------------------
 # Lightning commands
-# ---------------------------------------------------------------------------
-
 
 class TestLightningCommands:
     def test_status_missing_swap(self, runner):
@@ -304,10 +292,7 @@ class TestLightningCommands:
         )
         assert result.exit_code == 1
 
-# ---------------------------------------------------------------------------
 # Error handling
-# ---------------------------------------------------------------------------
-
 
 class TestErrorHandling:
     def test_json_error_shape(self, runner):
