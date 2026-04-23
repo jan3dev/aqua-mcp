@@ -378,7 +378,6 @@ class TestTransactions:
         """Only `limit` transactions are returned."""
         lw_import_mnemonic(mnemonic=TEST_MNEMONIC, wallet_name="lim_test")
 
-        str(lwk.Network.mainnet().policy_asset())
 
         def make_mock_tx(txid):
             tx = MagicMock()
