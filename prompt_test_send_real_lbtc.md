@@ -21,12 +21,12 @@ Manual test prompts for validating Aqua MCP Liquid on-chain functionality using 
 Import the wallet and verify there's sufficient L-BTC balance.
 
 ```
-Import this wallet and show me my Liquid balance:
+Import this wallet with the name prompt_wallet_<DATETIME> and show me my Liquid balance:
 SIGNER_MNEMONIC=${SIGNER_MNEMONIC}
 ```
 
 **Expected behavior:**
-- Wallet is imported with name `default`
+- Wallet is imported with name `prompt_wallet_<DATETIME>`
 - L-BTC balance is displayed in satoshis and BTC
 - Balance should be > 550 sats to cover the send amount (500 sats) plus network fees
 

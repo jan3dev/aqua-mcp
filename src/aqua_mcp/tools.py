@@ -3,19 +3,15 @@
 import json
 import logging
 import re
-import urllib.request
 import urllib.error
+import urllib.request
 from typing import Any
-from datetime import datetime, UTC
 
-logger = logging.getLogger(__name__)
-
-logger = logging.getLogger(__name__)
-
-from .assets import resolve_asset_name
+from .assets import MAINNET_ASSETS, TESTNET_ASSETS, resolve_asset_name
 from .bitcoin import BitcoinWalletManager
 from .wallet import WalletManager
 
+logger = logging.getLogger(__name__)
 
 ESPLORA_URLS = {
     "mainnet": "https://blockstream.info/liquid/api",
@@ -55,6 +51,7 @@ def get_lightning_manager() -> "LightningManager":
     global _lightning_manager
     if _lightning_manager is None:
         from .lightning import LightningManager
+
         _lightning_manager = LightningManager(
             storage=get_manager().storage,
             wallet_manager=get_manager(),
@@ -63,6 +60,7 @@ def get_lightning_manager() -> "LightningManager":
 
 
 # Tool implementations
+
 
 def lw_generate_mnemonic() -> dict[str, Any]:
     """
@@ -127,12 +125,12 @@ def lw_import_descriptor(
 ) -> dict[str, Any]:
     """
     Import a watch-only wallet from a CT descriptor.
-    
+
     Args:
         descriptor: CT descriptor string
         wallet_name: Name for the wallet
         network: "mainnet" or "testnet". Default: "mainnet"
-        
+
     Returns:
         wallet_name: Name of the created wallet
         network: Network the wallet is on
@@ -150,12 +148,12 @@ def lw_import_descriptor(
 def lw_export_descriptor(wallet_name: str = "default") -> dict[str, Any]:
     """
     Export the CT descriptor for a wallet.
-    
+
     The descriptor can be used to create a watch-only wallet elsewhere.
-    
+
     Args:
         wallet_name: Name of the wallet. Default: "default"
-        
+
     Returns:
         descriptor: CT descriptor string
         wallet_name: Name of the wallet
@@ -171,10 +169,10 @@ def lw_export_descriptor(wallet_name: str = "default") -> dict[str, Any]:
 def lw_balance(wallet_name: str = "default") -> dict[str, Any]:
     """
     Get wallet balance for all assets.
-    
+
     Args:
         wallet_name: Name of the wallet. Default: "default"
-        
+
     Returns:
         balances: List of asset balances
         wallet_name: Name of the wallet
@@ -193,11 +191,11 @@ def lw_address(
 ) -> dict[str, Any]:
     """
     Generate a receive address.
-    
+
     Args:
         wallet_name: Name of the wallet. Default: "default"
         index: Specific address index. Default: next unused
-        
+
     Returns:
         address: The Liquid address
         index: Address index
@@ -213,11 +211,11 @@ def lw_transactions(
 ) -> dict[str, Any]:
     """
     Get transaction history.
-    
+
     Args:
         wallet_name: Name of the wallet. Default: "default"
         limit: Maximum number of transactions. Default: 10
-        
+
     Returns:
         transactions: List of transactions
         count: Number of transactions returned
@@ -315,7 +313,9 @@ def _parse_tx_input(tx_input: str) -> tuple[str, str]:
     if re.fullmatch(r"[0-9a-fA-F]{64}", txid):
         return txid, "mainnet"
 
-    raise ValueError(f"Invalid input: expected a 64-char hex txid or a Blockstream URL, got: {tx_input}")
+    raise ValueError(
+        f"Invalid input: expected a 64-char hex txid or a Blockstream URL, got: {tx_input}"
+    )
 
 
 def lw_tx_status(tx: str) -> dict[str, Any]:
@@ -387,7 +387,9 @@ def lw_tx_status(tx: str) -> dict[str, Any]:
             result["confirmations"] = tip_height - block_height + 1
         except Exception as e:
             result["confirmations"] = None
-            result["warning"] = f"Could not fetch current block height to calculate confirmations: {e}"
+            result["warning"] = (
+                f"Could not fetch current block height to calculate confirmations: {e}"
+            )
     else:
         result["confirmations"] = 0
 
@@ -416,7 +418,7 @@ def btc_balance(wallet_name: str = "default") -> dict[str, Any]:
     return {
         "wallet_name": wallet_name,
         "balance_sats": balance_sats,
-        "balance_btc": round(balance_sats / 100_000_000, 8),
+        "balance_btc": f"{balance_sats / 100_000_000:.8f}",
     }
 
 
@@ -517,18 +519,26 @@ def unified_balance(wallet_name: str = "default") -> dict[str, Any]:
         btc = get_btc_manager()
         btc_sats = btc.get_balance(wallet_name)
     except ValueError as e:
-        bitcoin_error = str(e) or "This wallet has no Bitcoin descriptors (e.g. watch-only Liquid-only wallet)."
-        logger.info("unified_balance: Bitcoin balance unavailable for %s: %s", wallet_name, bitcoin_error)
+        bitcoin_error = (
+            str(e) or "This wallet has no Bitcoin descriptors (e.g. watch-only Liquid-only wallet)."
+        )
+        logger.info(
+            "unified_balance: Bitcoin balance unavailable for %s: %s", wallet_name, bitcoin_error
+        )
     except Exception as e:
         bitcoin_error = f"Could not fetch Bitcoin balance: {e}"
         logger.warning("unified_balance: %s", bitcoin_error, exc_info=True)
 
     result: dict[str, Any] = {
         "wallet_name": wallet_name,
-        "bitcoin": {
-            "balance_sats": btc_sats,
-            "balance_btc": round(btc_sats / 100_000_000, 8) if btc_sats is not None else None,
-        } if btc_sats is not None else None,
+        "bitcoin": (
+            {
+                "balance_sats": btc_sats,
+                "balance_btc": f"{btc_sats / 100_000_000:.8f}" if btc_sats is not None else None,
+            }
+            if btc_sats is not None
+            else None
+        ),
         "liquid": {
             "balances": [b.to_dict() for b in liquid_balances],
         },
@@ -541,7 +551,7 @@ def unified_balance(wallet_name: str = "default") -> dict[str, Any]:
 def lw_list_wallets() -> dict[str, Any]:
     """
     List all wallets.
-    
+
     Returns:
         wallets: List of wallet names
         count: Number of wallets
@@ -551,6 +561,39 @@ def lw_list_wallets() -> dict[str, Any]:
     return {
         "wallets": wallets,
         "count": len(wallets),
+    }
+
+
+def lw_list_assets(network: str = "mainnet") -> dict[str, Any]:
+    """
+    List known Liquid assets with their asset_id, ticker, name, and precision.
+
+    Use this to discover asset IDs for lw_send_asset without needing a prior
+    balance query. Tickers are the display name (e.g. "USDt", "DePix").
+
+    Args:
+        network: "mainnet" or "testnet". Default: "mainnet"
+
+    Returns:
+        network: Which registry was queried
+        count: Number of known assets
+        assets: List of {asset_id, ticker, name, precision}
+    """
+    if network not in ("mainnet", "testnet"):
+        raise ValueError(f"Unknown network: {network}")
+    registry = MAINNET_ASSETS if network == "mainnet" else TESTNET_ASSETS
+    return {
+        "network": network,
+        "count": len(registry),
+        "assets": [
+            {
+                "asset_id": info.asset_id,
+                "ticker": info.ticker,
+                "name": info.name,
+                "precision": info.precision,
+            }
+            for info in registry.values()
+        ],
     }
 
 
@@ -684,6 +727,7 @@ TOOLS = {
     "lw_send_asset": lw_send_asset,
     "lw_tx_status": lw_tx_status,
     "lw_list_wallets": lw_list_wallets,
+    "lw_list_assets": lw_list_assets,
     "delete_wallet": delete_wallet,
     "btc_balance": btc_balance,
     "btc_address": btc_address,

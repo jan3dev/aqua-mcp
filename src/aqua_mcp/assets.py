@@ -7,6 +7,7 @@ from typing import Optional
 @dataclass
 class AssetInfo:
     """Metadata for a known Liquid asset."""
+
     asset_id: str
     name: str
     ticker: str
@@ -16,7 +17,8 @@ class AssetInfo:
 
 # Mainnet known assets
 MAINNET_ASSETS: dict[str, AssetInfo] = {
-    info.asset_id: info for info in [
+    info.asset_id: info
+    for info in [
         AssetInfo(
             asset_id="6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d",
             name="Liquid Bitcoin",
@@ -78,3 +80,13 @@ def resolve_asset_name(asset_id: str, network: str = "mainnet") -> str:
     if info:
         return info.ticker
     return asset_id[:8] + "..."
+
+
+def lookup_asset_by_ticker(ticker: str, network: str = "mainnet") -> Optional[AssetInfo]:
+    """Look up asset metadata by ticker (case-insensitive). Returns None if unknown."""
+    registry = MAINNET_ASSETS if network == "mainnet" else TESTNET_ASSETS
+    target = ticker.lower()
+    for info in registry.values():
+        if info.ticker.lower() == target:
+            return info
+    return None
