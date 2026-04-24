@@ -2,10 +2,9 @@
 
 import io
 import json
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 from click.testing import CliRunner
@@ -16,7 +15,10 @@ from aqua_mcp.cli.main import cli
 from aqua_mcp.storage import Storage
 from aqua_mcp.wallet import WalletManager
 
-TEST_MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+TEST_MNEMONIC = (
+    "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon "
+    "abandon about"
+)
 
 
 class StringIOWithIsatty(io.StringIO):
@@ -65,6 +67,17 @@ def _import_wallet(runner):
     runner.invoke(cli, ["wallet", "import-mnemonic", "--mnemonic-stdin"],
                   input=TEST_MNEMONIC + "\n")
 
+
+def _cli_env(**overrides):
+    """Build a Click env overlay that can also unset loaded .env secrets.
+
+    CliRunner's env argument is an overlay, not a full replacement. Because the
+    CLI loads repo .env at import time, omitting AQUA_* keys from a copied env
+    does not remove them from os.environ during invoke().
+    """
+    env = {"AQUA_MNEMONIC": None, "AQUA_PASSWORD": None}
+    env.update(overrides)
+    return env
 
 
 # Secret resolution (unit tests for cli.password.resolve_secret)
@@ -168,6 +181,22 @@ class TestRootCli:
         with pytest.raises(json.JSONDecodeError):
             json.loads(result.output)
 
+    def test_serve_runs_mcp_server(self, runner):
+        """Serve command delegates to the MCP stdio server entrypoint."""
+        with patch("aqua_mcp.server.run_server", new_callable=AsyncMock) as mock_run_server:
+            result = runner.invoke(cli, ["serve"])
+
+        assert result.exit_code == 0
+        mock_run_server.assert_awaited_once()
+
+    def test_serve_help_has_no_transport_option(self, runner):
+        """Serve help should not advertise a dead transport selector."""
+        result = runner.invoke(cli, ["serve", "--help"])
+
+        assert result.exit_code == 0
+        assert "--transport" not in result.output
+        assert "Start the MCP server over stdio." in result.output
+
 
 # Wallet commands
 
@@ -207,12 +236,10 @@ class TestWalletCommands:
         assert data["wallet_name"] == "test_wallet"
 
     def test_import_mnemonic_from_env(self, runner):
-        env = {k: v for k, v in os.environ.items() if k != "AQUA_MNEMONIC"}
-        env["AQUA_MNEMONIC"] = TEST_MNEMONIC
         result = runner.invoke(
             cli,
             ["--format", "json", "wallet", "import-mnemonic"],
-            env=env,
+            env=_cli_env(AQUA_MNEMONIC=TEST_MNEMONIC),
         )
         assert result.exit_code == 0
         data = json.loads(result.stdout)
@@ -221,11 +248,10 @@ class TestWalletCommands:
 
     @patch("aqua_mcp.cli.wallet.click.prompt", return_value=TEST_MNEMONIC)
     def test_import_mnemonic_from_prompt(self, mock_prompt, runner):
-        env = {k: v for k, v in os.environ.items() if k != "AQUA_MNEMONIC"}
         result = runner.invoke(
             cli,
             ["--format", "json", "wallet", "import-mnemonic"],
-            env=env,
+            env=_cli_env(),
         )
         assert result.exit_code == 0
         mock_prompt.assert_called_once_with("Mnemonic", hide_input=True)
@@ -259,13 +285,10 @@ class TestWalletCommands:
     def test_password_via_env_var_encrypts_wallet(self, runner, isolated_manager):
         """AQUA_PASSWORD env var produces an encrypted wallet (regression test)."""
         manager, _ = isolated_manager
-        env = {k: v for k, v in os.environ.items() if k not in ("AQUA_MNEMONIC", "AQUA_PASSWORD")}
-        env["AQUA_MNEMONIC"] = TEST_MNEMONIC
-        env["AQUA_PASSWORD"] = "s3cret"
         result = runner.invoke(
             cli,
             ["--format", "json", "wallet", "import-mnemonic", "--wallet-name", "enc_env"],
-            env=env,
+            env=_cli_env(AQUA_MNEMONIC=TEST_MNEMONIC, AQUA_PASSWORD="s3cret"),
         )
         assert result.exit_code == 0, result.output
         stored = manager.storage.load_wallet("enc_env")
@@ -280,8 +303,6 @@ class TestWalletCommands:
         TestResolveSecret separately verify read_secret's TTY branch.
         """
         manager, _ = isolated_manager
-        env = {k: v for k, v in os.environ.items() if k not in ("AQUA_MNEMONIC", "AQUA_PASSWORD")}
-        env["AQUA_MNEMONIC"] = TEST_MNEMONIC
         with patch(
             "aqua_mcp.cli.password.read_secret", return_value="s3cret"
         ) as mock_read:
@@ -293,7 +314,7 @@ class TestWalletCommands:
                     "--password-stdin",
                     "--wallet-name", "enc_prompt",
                 ],
-                env=env,
+                env=_cli_env(AQUA_MNEMONIC=TEST_MNEMONIC),
             )
         assert result.exit_code == 0, result.output
         mock_read.assert_called_once_with("Password")
@@ -303,12 +324,10 @@ class TestWalletCommands:
     def test_no_password_stores_plaintext(self, runner, isolated_manager):
         """No stdin flag, no env var, --password-stdin omitted → wallet unencrypted."""
         manager, _ = isolated_manager
-        env = {k: v for k, v in os.environ.items() if k not in ("AQUA_MNEMONIC", "AQUA_PASSWORD")}
-        env["AQUA_MNEMONIC"] = TEST_MNEMONIC
         result = runner.invoke(
             cli,
             ["--format", "json", "wallet", "import-mnemonic", "--wallet-name", "plain_one"],
-            env=env,
+            env=_cli_env(AQUA_MNEMONIC=TEST_MNEMONIC),
         )
         assert result.exit_code == 0, result.output
         stored = manager.storage.load_wallet("plain_one")
@@ -418,7 +437,18 @@ class TestLiquidCommands:
         """Send without a wallet should error."""
         result = runner.invoke(
             cli,
-            ["--format", "json", "liquid", "send", "--wallet-name", "nope", "--address", "lq1x", "--amount", "1000"],
+            [
+                "--format",
+                "json",
+                "liquid",
+                "send",
+                "--wallet-name",
+                "nope",
+                "--address",
+                "lq1x",
+                "--amount",
+                "1000",
+            ],
         )
         assert result.exit_code == 1
 
@@ -534,8 +564,6 @@ class TestBtcCommands:
         we only verify that this command passes the env var value to btc_send.
         """
         _import_wallet(runner)
-        env = {k: v for k, v in os.environ.items() if k != "AQUA_PASSWORD"}
-        env["AQUA_PASSWORD"] = "s3cret"
         with patch("aqua_mcp.cli.btc.btc_send", return_value={"txid": "fake"}) as mock_send:
             result = runner.invoke(
                 cli,
@@ -546,7 +574,7 @@ class TestBtcCommands:
                     "--address", "bc1qxy",
                     "--amount", "1000",
                 ],
-                env=env,
+                env=_cli_env(AQUA_PASSWORD="s3cret"),
             )
         assert result.exit_code == 0, result.output
         mock_send.assert_called_once()
