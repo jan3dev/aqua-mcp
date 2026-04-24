@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-echo "🚀 AQUA MCP Publishing Script"
+echo "🚀 Agentic AQUA Publishing Script"
 echo "=============================="
 
 # Check if UV_PUBLISH_TOKEN is set
@@ -49,6 +49,6 @@ uv publish
 echo "✅ Published successfully!"
 echo ""
 echo "Users can now install with:"
-echo "  uvx aqua-mcp"
+echo "  uvx agentic-aqua"
 echo ""
-echo "View on PyPI: https://pypi.org/project/aqua-mcp/$VERSION/"
+echo "View on PyPI: https://pypi.org/project/agentic-aqua/$VERSION/"

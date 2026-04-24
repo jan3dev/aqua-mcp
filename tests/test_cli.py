@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from click.testing import CliRunner
 
-from aqua_mcp.bitcoin import BitcoinWalletManager
-from aqua_mcp.cli import password as password_mod
-from aqua_mcp.cli.main import cli
-from aqua_mcp.storage import Storage
-from aqua_mcp.wallet import WalletManager
+from aqua.bitcoin import BitcoinWalletManager
+from aqua.cli import password as password_mod
+from aqua.cli.main import cli
+from aqua.storage import Storage
+from aqua.wallet import WalletManager
 
 TEST_MNEMONIC = (
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon "
@@ -38,7 +38,7 @@ def isolated_manager():
 
     Patches sync_wallet on both LWK and BDK managers to avoid network calls.
     """
-    import aqua_mcp.tools as tools_module
+    import aqua.tools as tools_module
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         storage = Storage(Path(tmpdir))
@@ -183,7 +183,7 @@ class TestRootCli:
 
     def test_serve_runs_mcp_server(self, runner):
         """Serve command delegates to the MCP stdio server entrypoint."""
-        with patch("aqua_mcp.server.run_server", new_callable=AsyncMock) as mock_run_server:
+        with patch("aqua.server.run_server", new_callable=AsyncMock) as mock_run_server:
             result = runner.invoke(cli, ["serve"])
 
         assert result.exit_code == 0
@@ -246,7 +246,7 @@ class TestWalletCommands:
         assert data["wallet_name"] == "default"
         assert data["watch_only"] is False
 
-    @patch("aqua_mcp.cli.wallet.click.prompt", return_value=TEST_MNEMONIC)
+    @patch("aqua.cli.wallet.click.prompt", return_value=TEST_MNEMONIC)
     def test_import_mnemonic_from_prompt(self, mock_prompt, runner):
         result = runner.invoke(
             cli,
@@ -304,7 +304,7 @@ class TestWalletCommands:
         """
         manager, _ = isolated_manager
         with patch(
-            "aqua_mcp.cli.password.read_secret", return_value="s3cret"
+            "aqua.cli.password.read_secret", return_value="s3cret"
         ) as mock_read:
             result = runner.invoke(
                 cli,
@@ -564,7 +564,7 @@ class TestBtcCommands:
         we only verify that this command passes the env var value to btc_send.
         """
         _import_wallet(runner)
-        with patch("aqua_mcp.cli.btc.btc_send", return_value={"txid": "fake"}) as mock_send:
+        with patch("aqua.cli.btc.btc_send", return_value={"txid": "fake"}) as mock_send:
             result = runner.invoke(
                 cli,
                 [

@@ -11,7 +11,7 @@ from mcp.types import (
     ServerResult,
 )
 
-from aqua_mcp.server import create_server
+from aqua.server import create_server
 
 
 @pytest.fixture

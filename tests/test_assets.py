@@ -1,6 +1,6 @@
 """Tests for the Liquid asset registry lookups."""
 
-from aqua_mcp.assets import (
+from aqua.assets import (
     MAINNET_ASSETS,
     lookup_asset,
     lookup_asset_by_ticker,

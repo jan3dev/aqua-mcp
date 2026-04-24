@@ -1,4 +1,4 @@
-# AQUA MCP
+# Agentic AQUA
 
 MCP server for managing **Liquid Network** and **Bitcoin** wallets through AI assistants like Claude. One mnemonic backs both networks (unified wallet).
 
@@ -18,7 +18,7 @@ MCP server for managing **Liquid Network** and **Bitcoin** wallets through AI as
 > **Quickest way:** just ask your AI agent directly:
 >
 > ```
-> Install this MCP server: https://github.com/jan3dev/aqua-mcp
+> Install this MCP server: https://github.com/jan3dev/agentic-aqua
 > ```
 
 ### Recommended (uvx)
@@ -38,9 +38,9 @@ Configure Claude Desktop (`~/.claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "aqua-mcp": {
+    "agentic-aqua": {
       "command": "/full/path/to/uvx",
-      "args": ["aqua-mcp"]
+      "args": ["agentic-aqua"]
     }
   }
 }
@@ -60,8 +60,8 @@ Restart Claude Desktop and you're ready to use Bitcoin and Liquid wallets.
 Clone and install from source:
 
 ```bash
-git clone https://github.com/jan3dev/aqua-mcp.git
-cd aqua-mcp
+git clone https://github.com/jan3dev/agentic-aqua.git
+cd agentic-aqua
 uv sync
 ```
 
@@ -70,9 +70,9 @@ Configure Claude Desktop using the full path to `uv` (find with `which uv`):
 ```json
 {
   "mcpServers": {
-    "aqua-mcp": {
+    "agentic-aqua": {
       "command": "/full/path/to/uv",
-      "args": ["run", "--directory", "/absolute/path/to/aqua-mcp", "python", "-m", "aqua_mcp.server"]
+      "args": ["run", "--directory", "/absolute/path/to/agentic-aqua", "python", "-m", "aqua.server"]
     }
   }
 }
@@ -139,7 +139,13 @@ Once connected, you can ask Claude to:
 
 ## Configuration
 
-Default config location: `~/.aqua-mcp/config.json`
+Default config location: `~/.aqua/config.json`
+
+> **Migrating from `aqua-mcp`?** The config dir moved from `~/.aqua-mcp` to `~/.aqua`. There is no automatic migration. To carry over your wallets, run once:
+>
+> ```bash
+> mv ~/.aqua-mcp ~/.aqua
+> ```
 
 ```json
 {

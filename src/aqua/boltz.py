@@ -71,7 +71,7 @@ class BoltzClient:
             method=method,
             headers={
                 "Content-Type": "application/json",
-                "User-Agent": "aqua-mcp",
+                "User-Agent": "agentic-aqua",
             },
         )
         try:

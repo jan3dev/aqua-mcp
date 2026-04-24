@@ -6,7 +6,7 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aqua_mcp.boltz import BoltzClient, SwapInfo, decode_bolt11_amount_sats, generate_keypair, verify_preimage
+from aqua.boltz import BoltzClient, SwapInfo, decode_bolt11_amount_sats, generate_keypair, verify_preimage
 import io
 import urllib.error
 
@@ -111,7 +111,7 @@ class TestVerifyPreimage:
 class TestBoltzClient:
     """Tests for BoltzClient with mocked HTTP."""
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_get_submarine_pairs_returns_lbtc_btc(self, mock_urlopen):
         """GET /v2/swap/submarine returns L-BTC/BTC pair info."""
         mock_urlopen.return_value = _mock_response(MOCK_SUBMARINE_PAIRS)
@@ -125,7 +125,7 @@ class TestBoltzClient:
         assert pair["fees"]["percentage"] == 0.1
         assert pair["limits"]["minimal"] == 1000
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_create_submarine_swap_sends_correct_body(self, mock_urlopen):
         """POST body contains invoice, from, to, refundPublicKey."""
         mock_urlopen.return_value = _mock_response(MOCK_SWAP_RESPONSE)
@@ -145,7 +145,7 @@ class TestBoltzClient:
         assert body["to"] == "BTC"
         assert body["refundPublicKey"] == refund_pubkey
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_create_submarine_swap_returns_swap_data(self, mock_urlopen):
         """Response is parsed into dict with expected fields."""
         mock_urlopen.return_value = _mock_response(MOCK_SWAP_RESPONSE)
@@ -160,7 +160,7 @@ class TestBoltzClient:
         assert "swapTree" in result
         assert "timeoutBlockHeight" in result
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_get_swap_status_returns_status(self, mock_urlopen):
         """get_swap_status returns current swap status."""
         mock_urlopen.return_value = _mock_response({"status": "transaction.mempool"})
@@ -169,7 +169,7 @@ class TestBoltzClient:
         result = client.get_swap_status("test_swap_123")
         assert result["status"] == "transaction.mempool"
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_get_claim_details_returns_preimage(self, mock_urlopen):
         """get_claim_details returns preimage and transactionHash."""
         mock_urlopen.return_value = _mock_response(MOCK_CLAIM_DETAILS)
@@ -179,7 +179,7 @@ class TestBoltzClient:
         assert result["preimage"] == "aa" * 32
         assert result["transactionHash"] == "bb" * 32
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_api_request_http_error_includes_boltz_message(self, mock_urlopen):
         """HTTP errors include Boltz error detail in RuntimeError."""
 
@@ -196,7 +196,7 @@ class TestBoltzClient:
         with pytest.raises(RuntimeError, match="invoice already used"):
             client.get_submarine_pairs()
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_api_request_http_error_without_body(self, mock_urlopen):
         """HTTP errors without parseable body still produce a useful message."""
         err = urllib.error.HTTPError(
@@ -212,7 +212,7 @@ class TestBoltzClient:
         with pytest.raises(RuntimeError, match="Boltz API error.*500"):
             client.get_submarine_pairs()
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_api_request_timeout_raises(self, mock_urlopen):
         """Network timeout raises RuntimeError with context."""
 
@@ -222,7 +222,7 @@ class TestBoltzClient:
         with pytest.raises(RuntimeError, match="Boltz API unreachable"):
             client.get_submarine_pairs()
 
-    @patch("aqua_mcp.boltz.urllib.request.urlopen")
+    @patch("aqua.boltz.urllib.request.urlopen")
     def test_api_request_invalid_json_raises(self, mock_urlopen):
         """Non-JSON response raises exception."""
         mock_urlopen.return_value = _mock_response(b"not json at all")

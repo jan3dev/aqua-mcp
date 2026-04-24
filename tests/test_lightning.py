@@ -8,19 +8,19 @@ from datetime import datetime, UTC
 
 import pytest
 
-from aqua_mcp.lightning import (
+from aqua.lightning import (
     LightningSwap,
     LightningManager,
 )
-from aqua_mcp.storage import Storage
-from aqua_mcp.tools import (
+from aqua.storage import Storage
+from aqua.tools import (
     get_manager,
     get_lightning_manager,
     lightning_receive,
     lightning_send,
     lightning_transaction_status,
 )
-from aqua_mcp.wallet import WalletManager, Balance
+from aqua.wallet import WalletManager, Balance
 
 
 TEST_MNEMONIC = (
@@ -83,7 +83,7 @@ def _mock_response(data, status=200):
 @pytest.fixture(autouse=True)
 def isolated_managers():
     """Replace global managers with temp storage."""
-    import aqua_mcp.tools as tools_module
+    import aqua.tools as tools_module
 
     with tempfile.TemporaryDirectory() as tmpdir:
         storage = Storage(Path(tmpdir))
@@ -183,7 +183,7 @@ class TestLightningManagerReceive:
         """Happy path: valid amount, wallet exists, creates and persists swap."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -249,7 +249,7 @@ class TestLightningManagerReceive:
         """Ankara API error is wrapped and propagated."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.side_effect = RuntimeError("API error")
@@ -261,7 +261,7 @@ class TestLightningManagerReceive:
 class TestLightningManagerSend:
     """Tests for LightningManager.pay_invoice()."""
 
-    @patch("aqua_mcp.lightning.generate_keypair")
+    @patch("aqua.lightning.generate_keypair")
     @patch.object(
         type(get_manager()),
         "get_balance",
@@ -274,9 +274,9 @@ class TestLightningManagerSend:
             )
         ],
     )
-    @patch("aqua_mcp.lightning.decode_bolt11_amount_sats")
-    @patch("aqua_mcp.lightning.BoltzClient")
-    @patch("aqua_mcp.wallet.WalletManager.send")
+    @patch("aqua.lightning.decode_bolt11_amount_sats")
+    @patch("aqua.lightning.BoltzClient")
+    @patch("aqua.wallet.WalletManager.send")
     def test_send_happy_path(
         self,
         mock_send,
@@ -341,7 +341,7 @@ class TestLightningManagerSend:
         """Invoice amount outside limits raises ValueError."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.decode_bolt11_amount_sats") as mock_decode:
+        with patch("aqua.lightning.decode_bolt11_amount_sats") as mock_decode:
             mock_decode.return_value = 50  # Below minimum
 
             with pytest.raises(ValueError, match="below minimum"):
@@ -352,7 +352,7 @@ class TestLightningManagerSend:
         "get_balance",
         return_value=[],  # No balance
     )
-    @patch("aqua_mcp.lightning.decode_bolt11_amount_sats")
+    @patch("aqua.lightning.decode_bolt11_amount_sats")
     def test_send_insufficient_balance(
         self, mock_decode, mock_get_balance, test_wallet
     ):
@@ -375,8 +375,8 @@ class TestLightningManagerSend:
             )
         ],
     )
-    @patch("aqua_mcp.lightning.decode_bolt11_amount_sats")
-    @patch("aqua_mcp.lightning.BoltzClient")
+    @patch("aqua.lightning.decode_bolt11_amount_sats")
+    @patch("aqua.lightning.BoltzClient")
     def test_send_pair_not_available(
         self, mock_boltz, mock_decode, mock_get_balance, test_wallet
     ):
@@ -391,7 +391,7 @@ class TestLightningManagerSend:
         with pytest.raises(ValueError, match="pair not available"):
             manager.pay_invoice(VALID_INVOICE_MAINNET, "default")
 
-    @patch("aqua_mcp.lightning.generate_keypair")
+    @patch("aqua.lightning.generate_keypair")
     @patch.object(
         type(get_manager()),
         "send",
@@ -409,8 +409,8 @@ class TestLightningManagerSend:
             )
         ],
     )
-    @patch("aqua_mcp.lightning.decode_bolt11_amount_sats")
-    @patch("aqua_mcp.lightning.BoltzClient")
+    @patch("aqua.lightning.decode_bolt11_amount_sats")
+    @patch("aqua.lightning.BoltzClient")
     def test_send_persists_before_sending(
         self,
         mock_boltz,
@@ -454,7 +454,7 @@ class TestLightningManagerReceiveStatus:
         """Settled swap auto-claims and updates status."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -462,7 +462,7 @@ class TestLightningManagerReceiveStatus:
             swap = manager.create_receive_invoice(100000, "default")
             swap_id = swap.swap_id
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.verify_swap.return_value = MOCK_ANKARA_VERIFY_SETTLED
@@ -482,7 +482,7 @@ class TestLightningManagerReceiveStatus:
         """Pending swap returns pending status."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -500,7 +500,7 @@ class TestLightningManagerReceiveStatus:
         """Claim failure adds warning."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -519,7 +519,7 @@ class TestLightningManagerReceiveStatus:
         """409 'already claimed' from Ankara is treated as successful completion."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -546,7 +546,7 @@ class TestLightningManagerReceiveStatus:
         """After 409 completes the swap, subsequent checks skip claiming."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -572,7 +572,7 @@ class TestLightningManagerReceiveStatus:
         """Non-409 errors (e.g. 500) keep status pending with claim_warning."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -625,7 +625,7 @@ class TestLightningManagerReceiveStatus:
         """When API is down, returns local data with warning."""
         manager = get_lightning_manager()
 
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -663,7 +663,7 @@ class TestLightningManagerSendStatus:
         )
         isolated_managers.storage.save_lightning_swap(swap)
 
-        with patch("aqua_mcp.lightning.BoltzClient") as mock_boltz:
+        with patch("aqua.lightning.BoltzClient") as mock_boltz:
             mock_client = MagicMock()
             mock_boltz.return_value = mock_client
             mock_client.get_swap_status.return_value = {"status": "transaction.mempool"}
@@ -693,7 +693,7 @@ class TestLightningManagerSendStatus:
         )
         isolated_managers.storage.save_lightning_swap(swap)
 
-        with patch("aqua_mcp.lightning.BoltzClient") as mock_boltz:
+        with patch("aqua.lightning.BoltzClient") as mock_boltz:
             mock_client = MagicMock()
             mock_boltz.return_value = mock_client
             mock_client.get_swap_status.return_value = {"status": "transaction.claimed"}
@@ -730,7 +730,7 @@ class TestLightningManagerSendStatus:
         )
         isolated_managers.storage.save_lightning_swap(swap)
 
-        with patch("aqua_mcp.lightning.BoltzClient") as mock_boltz:
+        with patch("aqua.lightning.BoltzClient") as mock_boltz:
             mock_client = MagicMock()
             mock_boltz.return_value = mock_client
             mock_client.get_swap_status.return_value = {"status": "transaction.claimed"}
@@ -760,7 +760,7 @@ class TestLightningManagerSendStatus:
         )
         isolated_managers.storage.save_lightning_swap(swap)
 
-        with patch("aqua_mcp.lightning.BoltzClient") as mock_boltz:
+        with patch("aqua.lightning.BoltzClient") as mock_boltz:
             mock_client = MagicMock()
             mock_boltz.return_value = mock_client
             mock_client.get_swap_status.return_value = {"status": "swap.expired"}
@@ -790,7 +790,7 @@ class TestLightningManagerSendStatus:
         )
         isolated_managers.storage.save_lightning_swap(swap)
 
-        with patch("aqua_mcp.lightning.BoltzClient") as mock_boltz:
+        with patch("aqua.lightning.BoltzClient") as mock_boltz:
             mock_client = MagicMock()
             mock_boltz.return_value = mock_client
             mock_client.get_swap_status.side_effect = RuntimeError("Boltz API unreachable")
@@ -805,7 +805,7 @@ class TestLightningManagerSendStatus:
     def test_send_status_receive_swap_raises(self, test_wallet, isolated_managers):
         """get_send_status called on receive swap raises ValueError."""
         manager = get_lightning_manager()
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -821,7 +821,7 @@ class TestLightningManagerGetSwapStatus:
     def test_routes_receive_to_get_receive_status(self, test_wallet, isolated_managers):
         """Router dispatches receive swap to get_receive_status."""
         manager = get_lightning_manager()
-        with patch("aqua_mcp.lightning.AnkaraClient") as mock_ankara:
+        with patch("aqua.lightning.AnkaraClient") as mock_ankara:
             mock_client = MagicMock()
             mock_ankara.return_value = mock_client
             mock_client.create_swap.return_value = MOCK_ANKARA_CREATE_RESPONSE
@@ -853,7 +853,7 @@ class TestLightningManagerGetSwapStatus:
         )
         isolated_managers.storage.save_lightning_swap(swap)
 
-        with patch("aqua_mcp.lightning.BoltzClient") as mock_boltz:
+        with patch("aqua.lightning.BoltzClient") as mock_boltz:
             mock_client = MagicMock()
             mock_boltz.return_value = mock_client
             mock_client.get_swap_status.return_value = {"status": "transaction.confirmed"}
@@ -877,7 +877,7 @@ class TestLightningTools:
 
     def test_lightning_receive_tool(self, test_wallet):
         """lightning_receive tool delegates to manager."""
-        with patch("aqua_mcp.tools.get_lightning_manager") as mock_get:
+        with patch("aqua.tools.get_lightning_manager") as mock_get:
             mock_manager = MagicMock()
             mock_get.return_value = mock_manager
             mock_manager.create_receive_invoice.return_value = LightningSwap(
@@ -901,7 +901,7 @@ class TestLightningTools:
 
     def test_lightning_send_tool(self, test_wallet):
         """lightning_send tool delegates to manager."""
-        with patch("aqua_mcp.tools.get_lightning_manager") as mock_get:
+        with patch("aqua.tools.get_lightning_manager") as mock_get:
             mock_manager = MagicMock()
             mock_get.return_value = mock_manager
             mock_manager.pay_invoice.return_value = LightningSwap(
@@ -925,7 +925,7 @@ class TestLightningTools:
 
     def test_lightning_transaction_status_tool(self):
         """lightning_transaction_status tool delegates to manager.get_swap_status."""
-        with patch("aqua_mcp.tools.get_lightning_manager") as mock_get:
+        with patch("aqua.tools.get_lightning_manager") as mock_get:
             mock_manager = MagicMock()
             mock_get.return_value = mock_manager
             mock_manager.get_swap_status.return_value = {

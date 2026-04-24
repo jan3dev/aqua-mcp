@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "aqua-mcp"
+name = "agentic-aqua"
 version = "0.2.1"
-description = "MCP server for Liquid Network wallet operations"
+description = "Agentic AQUA — MCP server for Liquid Network and Bitcoin wallet operations"
 readme = "README.md"
 license = "MIT"
 requires-python = ">=3.13"
@@ -41,16 +41,16 @@ dev = [
 ]
 
 [project.scripts]
-aqua-mcp = "aqua_mcp.server:main"
-aqua-cli = "aqua_mcp.cli.main:cli"
+aqua = "aqua.server:main"
+aqua-cli = "aqua.cli.main:cli"
 
 [project.urls]
-Homepage = "https://github.com/jan3dev/aqua-mcp"
-Repository = "https://github.com/jan3dev/aqua-mcp"
-Documentation = "https://github.com/jan3dev/aqua-mcp#readme"
+Homepage = "https://github.com/jan3dev/agentic-aqua"
+Repository = "https://github.com/jan3dev/agentic-aqua"
+Documentation = "https://github.com/jan3dev/agentic-aqua#readme"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/aqua_mcp"]
+packages = ["src/aqua"]
 
 [tool.black]
 line-length = 100

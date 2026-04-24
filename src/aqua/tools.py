@@ -334,7 +334,7 @@ def lw_tx_status(tx: str) -> dict[str, Any]:
     txid, network = _parse_tx_input(tx)
     api_url = f"{ESPLORA_URLS[network]}/tx/{txid}"
 
-    req = urllib.request.Request(api_url, headers={"User-Agent": "aqua-mcp"})
+    req = urllib.request.Request(api_url, headers={"User-Agent": "agentic-aqua"})
     try:
         with urllib.request.urlopen(req, timeout=15) as resp:
             data = json.loads(resp.read().decode())
@@ -380,7 +380,7 @@ def lw_tx_status(tx: str) -> dict[str, Any]:
             result["block_time"] = block_time
         # Fetch current tip to calculate confirmations
         tip_url = f"{ESPLORA_URLS[network]}/blocks/tip/height"
-        tip_req = urllib.request.Request(tip_url, headers={"User-Agent": "aqua-mcp"})
+        tip_req = urllib.request.Request(tip_url, headers={"User-Agent": "agentic-aqua"})
         try:
             with urllib.request.urlopen(tip_req, timeout=15) as resp:
                 tip_height = int(resp.read().decode().strip())

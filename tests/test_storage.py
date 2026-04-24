@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-from aqua_mcp.storage import Storage, WalletData, Config, _validate_wallet_name
+from aqua.storage import Storage, WalletData, Config, _validate_wallet_name
 
 
 @pytest.fixture
@@ -155,7 +155,7 @@ class TestSwapStorage:
     """Tests for swap persistence (Layer 4)."""
 
     def _make_swap(self, **overrides):
-        from aqua_mcp.boltz import SwapInfo
+        from aqua.boltz import SwapInfo
 
         defaults = {
             "swap_id": "test_swap_123",
@@ -278,7 +278,7 @@ class TestLightningSwapStorage:
 
     def test_save_load_lightning_swap_receive(self, temp_storage):
         """Test saving and loading a receive Lightning swap."""
-        from aqua_mcp.lightning import LightningSwap
+        from aqua.lightning import LightningSwap
         from datetime import datetime, UTC
 
         swap = LightningSwap(
@@ -304,7 +304,7 @@ class TestLightningSwapStorage:
 
     def test_save_load_lightning_swap_send(self, temp_storage):
         """Test saving and loading a send Lightning swap."""
-        from aqua_mcp.lightning import LightningSwap
+        from aqua.lightning import LightningSwap
         from datetime import datetime, UTC
 
         swap = LightningSwap(
@@ -336,7 +336,7 @@ class TestLightningSwapStorage:
 
     def test_list_lightning_swaps(self, temp_storage):
         """Test listing all Lightning swap IDs."""
-        from aqua_mcp.lightning import LightningSwap
+        from aqua.lightning import LightningSwap
         from datetime import datetime, UTC
 
         assert temp_storage.list_lightning_swaps() == []
@@ -372,7 +372,7 @@ class TestLightningSwapStorage:
     @pytest.mark.skipif(sys.platform == "win32", reason="Unix mode bits")
     def test_lightning_swap_file_permissions(self, temp_storage):
         """Lightning swap files should be created with 0600 permissions."""
-        from aqua_mcp.lightning import LightningSwap
+        from aqua.lightning import LightningSwap
         from datetime import datetime, UTC
 
         swap = LightningSwap(

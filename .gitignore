@@ -53,7 +53,8 @@ htmlcov/
 
 # Wallet data (never commit!)
 .liquid-wallet/  # Legacy, will be removed
-.aqua-mcp/
+.aqua-mcp/      # Legacy, replaced by .aqua/
+.aqua/
 
 # AI
 .claude/
