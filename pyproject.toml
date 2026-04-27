@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "agentic-aqua"
-version = "0.3.0"
+dynamic = ["version"]
 description = "Agentic AQUA — MCP server for Liquid Network and Bitcoin wallet operations"
 readme = "README.md"
 license = "MIT"
@@ -48,6 +48,9 @@ aqua-mcp = "aqua.server:main"
 Homepage = "https://github.com/jan3dev/agentic-aqua"
 Repository = "https://github.com/jan3dev/agentic-aqua"
 Documentation = "https://github.com/jan3dev/agentic-aqua#readme"
+
+[tool.hatch.version]
+path = "src/aqua/__init__.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/aqua"]
