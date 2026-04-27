@@ -15,7 +15,7 @@ import time
 import pytest
 from click.testing import CliRunner
 
-from aqua_mcp.cli.main import cli
+from aqua.cli.main import cli
 
 DEFAULT_MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
 SIGNER_MNEMONIC = os.getenv("SIGNER_MNEMONIC", DEFAULT_MNEMONIC)

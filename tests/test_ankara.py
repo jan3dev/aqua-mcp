@@ -7,9 +7,9 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from aqua_mcp.ankara import AnkaraClient, AnkaraSwapInfo
-from aqua_mcp.storage import Storage
-from aqua_mcp.wallet import WalletManager
+from aqua.ankara import AnkaraClient, AnkaraSwapInfo
+from aqua.storage import Storage
+from aqua.wallet import WalletManager
 import urllib.error
 
 
@@ -51,7 +51,7 @@ def _mock_response(data, status=200):
 @pytest.fixture(autouse=True)
 def isolated_manager():
     """Replace the global manager with one using a temp directory."""
-    import aqua_mcp.tools as tools_module
+    import aqua.tools as tools_module
 
     with tempfile.TemporaryDirectory() as tmpdir:
         storage = Storage(Path(tmpdir))

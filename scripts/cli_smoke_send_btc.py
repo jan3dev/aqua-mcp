@@ -28,7 +28,7 @@ import time
 
 from click.testing import CliRunner
 
-from aqua_mcp.cli.main import cli
+from aqua.cli.main import cli
 
 MNEMONIC = os.getenv("SIGNER_MNEMONIC")
 DEST_ADDRESS = os.getenv("BTC_DEST_ADDRESS")

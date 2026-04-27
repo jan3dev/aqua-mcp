@@ -1,4 +1,4 @@
-# AQUA MCP - Specification
+# Agentic AQUA - Specification
 
 ## Overview
 
@@ -103,9 +103,9 @@ MCP prompts provide pre-built conversation starters for common workflows.
 
 ## Data Storage
 
-Wallet data stored in `~/.aqua-mcp/`:
+Wallet data stored in `~/.aqua/`:
 ```
-~/.aqua-mcp/
+~/.aqua/
 ├── config.json          # Network settings, defaults
 ├── wallets/
 │   ├── default.json     # Encrypted wallet data
@@ -382,12 +382,12 @@ This is a Python/uv project. Always use `uv` commands (uv sync, uv run, uvx) ins
 ### Project Structure
 
 ```
-aqua-mcp/
+agentic-aqua/
 ├── AGENTS.md           # This file (specs)
 ├── README.md           # User documentation
 ├── pyproject.toml      # Python package config
 ├── src/
-│   └── aqua_mcp/
+│   └── aqua/
 │       ├── __init__.py
 │       ├── server.py   # MCP server entry point (tools, resources, prompts)
 │       ├── tools.py    # Tool implementations (lw_*, btc_*, unified_*, lightning_*)
@@ -419,7 +419,7 @@ uv run python -m pytest tests/
 
 ```bash
 uv sync
-uv run python -m aqua_mcp.server
+uv run python -m aqua.server
 ```
 
 ---

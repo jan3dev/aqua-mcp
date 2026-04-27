@@ -9,11 +9,11 @@ from unittest.mock import AsyncMock, patch
 import pytest
 from click.testing import CliRunner
 
-from aqua_mcp.bitcoin import BitcoinWalletManager
-from aqua_mcp.cli import password as password_mod
-from aqua_mcp.cli.main import cli
-from aqua_mcp.storage import Storage
-from aqua_mcp.wallet import WalletManager
+from aqua.bitcoin import BitcoinWalletManager
+from aqua.cli import password as password_mod
+from aqua.cli.main import cli
+from aqua.storage import Storage
+from aqua.wallet import WalletManager
 
 TEST_MNEMONIC = (
     "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon "
@@ -38,7 +38,7 @@ def isolated_manager():
 
     Patches sync_wallet on both LWK and BDK managers to avoid network calls.
     """
-    import aqua_mcp.tools as tools_module
+    import aqua.tools as tools_module
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         storage = Storage(Path(tmpdir))
@@ -64,8 +64,9 @@ def runner():
 
 def _import_wallet(runner):
     """Helper: import the test wallet via CLI."""
-    runner.invoke(cli, ["wallet", "import-mnemonic", "--mnemonic-stdin"],
-                  input=TEST_MNEMONIC + "\n")
+    runner.invoke(
+        cli, ["wallet", "import-mnemonic", "--mnemonic-stdin"], input=TEST_MNEMONIC + "\n"
+    )
 
 
 def _cli_env(**overrides):
@@ -183,7 +184,7 @@ class TestRootCli:
 
     def test_serve_runs_mcp_server(self, runner):
         """Serve command delegates to the MCP stdio server entrypoint."""
-        with patch("aqua_mcp.server.run_server", new_callable=AsyncMock) as mock_run_server:
+        with patch("aqua.server.run_server", new_callable=AsyncMock) as mock_run_server:
             result = runner.invoke(cli, ["serve"])
 
         assert result.exit_code == 0
@@ -195,7 +196,7 @@ class TestRootCli:
 
         assert result.exit_code == 0
         assert "--transport" not in result.output
-        assert "Start the MCP server over stdio." in result.output
+        assert "Start the MCP server over stdio (`aqua serve` or `aqua-mcp`)." in result.output
 
 
 # Wallet commands
@@ -224,10 +225,13 @@ class TestWalletCommands:
         result = runner.invoke(
             cli,
             [
-                "--format", "json",
-                "wallet", "import-mnemonic",
+                "--format",
+                "json",
+                "wallet",
+                "import-mnemonic",
                 "--mnemonic-stdin",
-                "--wallet-name", "test_wallet",
+                "--wallet-name",
+                "test_wallet",
             ],
             input=TEST_MNEMONIC + "\n",
         )
@@ -246,7 +250,7 @@ class TestWalletCommands:
         assert data["wallet_name"] == "default"
         assert data["watch_only"] is False
 
-    @patch("aqua_mcp.cli.wallet.click.prompt", return_value=TEST_MNEMONIC)
+    @patch("aqua.cli.wallet.click.prompt", return_value=TEST_MNEMONIC)
     def test_import_mnemonic_from_prompt(self, mock_prompt, runner):
         result = runner.invoke(
             cli,
@@ -271,10 +275,14 @@ class TestWalletCommands:
         result = runner.invoke(
             cli,
             [
-                "--format", "json",
-                "wallet", "import-mnemonic",
-                "--mnemonic-stdin", "--password-stdin",
-                "--wallet-name", "enc_stdin",
+                "--format",
+                "json",
+                "wallet",
+                "import-mnemonic",
+                "--mnemonic-stdin",
+                "--password-stdin",
+                "--wallet-name",
+                "enc_stdin",
             ],
             input=TEST_MNEMONIC + "\ns3cret\n",
         )
@@ -303,16 +311,17 @@ class TestWalletCommands:
         TestResolveSecret separately verify read_secret's TTY branch.
         """
         manager, _ = isolated_manager
-        with patch(
-            "aqua_mcp.cli.password.read_secret", return_value="s3cret"
-        ) as mock_read:
+        with patch("aqua.cli.password.read_secret", return_value="s3cret") as mock_read:
             result = runner.invoke(
                 cli,
                 [
-                    "--format", "json",
-                    "wallet", "import-mnemonic",
+                    "--format",
+                    "json",
+                    "wallet",
+                    "import-mnemonic",
                     "--password-stdin",
-                    "--wallet-name", "enc_prompt",
+                    "--wallet-name",
+                    "enc_prompt",
                 ],
                 env=_cli_env(AQUA_MNEMONIC=TEST_MNEMONIC),
             )
@@ -361,10 +370,14 @@ class TestWalletCommands:
         result = runner.invoke(
             cli,
             [
-                "--format", "json",
-                "wallet", "import-descriptor",
-                "--descriptor", descriptor,
-                "--wallet-name", "watch_only",
+                "--format",
+                "json",
+                "wallet",
+                "import-descriptor",
+                "--descriptor",
+                descriptor,
+                "--wallet-name",
+                "watch_only",
             ],
         )
         assert result.exit_code == 0
@@ -401,6 +414,7 @@ class TestWalletCommands:
 
 
 # Liquid commands
+
 
 class TestLiquidCommands:
     def test_balance(self, runner):
@@ -458,11 +472,16 @@ class TestLiquidCommands:
         result = runner.invoke(
             cli,
             [
-                "--format", "json",
-                "liquid", "send",
-                "--wallet-name", "default",
-                "--address", "lq1x",
-                "--amount", "0",
+                "--format",
+                "json",
+                "liquid",
+                "send",
+                "--wallet-name",
+                "default",
+                "--address",
+                "lq1x",
+                "--amount",
+                "0",
             ],
         )
         assert result.exit_code == 2
@@ -484,23 +503,41 @@ class TestLiquidCommands:
             assert set(entry.keys()) == {"asset_id", "ticker", "name", "precision"}
             assert len(entry["asset_id"]) == 64
 
-
     def test_send_asset_requires_exactly_one_of_id_or_ticker(self, runner):
         """send-asset must receive exactly one of --asset-id or --asset-ticker."""
         _import_wallet(runner)
         neither = runner.invoke(
             cli,
-            ["liquid", "send-asset", "--wallet-name", "default",
-             "--address", "lq1x", "--amount", "100"],
+            [
+                "liquid",
+                "send-asset",
+                "--wallet-name",
+                "default",
+                "--address",
+                "lq1x",
+                "--amount",
+                "100",
+            ],
         )
         assert neither.exit_code != 0
         assert "exactly one" in neither.output.lower()
 
         both = runner.invoke(
             cli,
-            ["liquid", "send-asset", "--wallet-name", "default",
-             "--address", "lq1x", "--amount", "100",
-             "--asset-id", "abc", "--asset-ticker", "USDt"],
+            [
+                "liquid",
+                "send-asset",
+                "--wallet-name",
+                "default",
+                "--address",
+                "lq1x",
+                "--amount",
+                "100",
+                "--asset-id",
+                "abc",
+                "--asset-ticker",
+                "USDt",
+            ],
         )
         assert both.exit_code != 0
         assert "exactly one" in both.output.lower()
@@ -510,9 +547,18 @@ class TestLiquidCommands:
         _import_wallet(runner)
         result = runner.invoke(
             cli,
-            ["liquid", "send-asset", "--wallet-name", "default",
-             "--address", "lq1x", "--amount", "100",
-             "--asset-ticker", "NOTAREAL"],
+            [
+                "liquid",
+                "send-asset",
+                "--wallet-name",
+                "default",
+                "--address",
+                "lq1x",
+                "--amount",
+                "100",
+                "--asset-ticker",
+                "NOTAREAL",
+            ],
         )
         assert result.exit_code != 0
         assert "unknown ticker" in result.output.lower()
@@ -523,9 +569,16 @@ class TestLiquidCommands:
         result = runner.invoke(
             cli,
             [
-                "liquid", "send-asset", "--wallet-name", "default",
-                "--address", "lq1x", "--amount", "0",
-                "--asset-ticker", "USDt",
+                "liquid",
+                "send-asset",
+                "--wallet-name",
+                "default",
+                "--address",
+                "lq1x",
+                "--amount",
+                "0",
+                "--asset-ticker",
+                "USDt",
             ],
         )
         assert result.exit_code != 0
@@ -533,6 +586,7 @@ class TestLiquidCommands:
 
 
 # BTC commands
+
 
 class TestBtcCommands:
     def test_balance(self, runner):
@@ -564,15 +618,20 @@ class TestBtcCommands:
         we only verify that this command passes the env var value to btc_send.
         """
         _import_wallet(runner)
-        with patch("aqua_mcp.cli.btc.btc_send", return_value={"txid": "fake"}) as mock_send:
+        with patch("aqua.cli.btc.btc_send", return_value={"txid": "fake"}) as mock_send:
             result = runner.invoke(
                 cli,
                 [
-                    "--format", "json",
-                    "btc", "send",
-                    "--wallet-name", "default",
-                    "--address", "bc1qxy",
-                    "--amount", "1000",
+                    "--format",
+                    "json",
+                    "btc",
+                    "send",
+                    "--wallet-name",
+                    "default",
+                    "--address",
+                    "bc1qxy",
+                    "--amount",
+                    "1000",
                 ],
                 env=_cli_env(AQUA_PASSWORD="s3cret"),
             )
@@ -583,6 +642,7 @@ class TestBtcCommands:
 
 # Lightning commands
 
+
 class TestLightningCommands:
     def test_status_missing_swap(self, runner):
         """Status for nonexistent swap should error."""
@@ -592,7 +652,9 @@ class TestLightningCommands:
         )
         assert result.exit_code == 1
 
+
 # Error handling
+
 
 class TestErrorHandling:
     def test_json_error_shape(self, runner):

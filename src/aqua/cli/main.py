@@ -33,7 +33,7 @@ class AquaContext:
     help="Output format. Default: pretty on terminal, json when piped.",
 )
 @click.option("--verbose", is_flag=True, help="Enable verbose logging.")
-@click.version_option(package_name="aqua-mcp")
+@click.version_option(package_name="agentic-aqua")
 @click.pass_context
 def cli(ctx, fmt, verbose):
     """AQUA wallet CLI — manage Bitcoin, Liquid, and Lightning wallets."""

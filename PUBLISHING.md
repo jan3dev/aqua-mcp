@@ -25,7 +25,7 @@
 
 ### 1. Update Version
 
-Edit `pyproject.toml` and `src/aqua_mcp/__init__.py`:
+Edit `pyproject.toml` and `src/aqua/__init__.py`:
 ```python
 __version__ = "0.1.1"  # Increment version
 ```
@@ -41,17 +41,17 @@ uv build
 ```
 
 This creates:
-- `dist/aqua_mcp-0.1.1-py3-none-any.whl`
-- `dist/aqua_mcp-0.1.1.tar.gz`
+- `dist/agentic_aqua-0.1.1-py3-none-any.whl`
+- `dist/agentic_aqua-0.1.1.tar.gz`
 
 ### 3. Test Locally (Optional)
 
 ```bash
 # Install from local build
-uv pip install dist/aqua_mcp-0.1.1-py3-none-any.whl
+uv pip install dist/agentic_aqua-0.1.1-py3-none-any.whl
 
 # Test the command
-aqua-mcp --help
+aqua --help
 ```
 
 ### 4. Publish to PyPI
@@ -68,7 +68,7 @@ uv publish --token pypi-YOUR_TOKEN_HERE
 
 ```bash
 # Test with uvx
-uvx aqua-mcp
+uvx agentic-aqua
 ```
 
 ## Quick Publish Script
@@ -93,13 +93,13 @@ Users can install with:
 
 ```bash
 # With uvx (recommended)
-uvx aqua-mcp
+uvx agentic-aqua
 
 # With pip
-pip install aqua-mcp
+pip install agentic-aqua
 
 # With uv
-uv pip install aqua-mcp
+uv pip install agentic-aqua
 ```
 
 ## Troubleshooting

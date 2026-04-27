@@ -7,9 +7,9 @@ from unittest.mock import patch
 import lwk
 import pytest
 
-from aqua_mcp.bitcoin import BitcoinWalletManager, _extract_confirmation_height
-from aqua_mcp.storage import Storage, WalletData
-from aqua_mcp.tools import (
+from aqua.bitcoin import BitcoinWalletManager, _extract_confirmation_height
+from aqua.storage import Storage, WalletData
+from aqua.tools import (
     btc_address,
     btc_balance,
     btc_send,
@@ -27,11 +27,11 @@ def isolated_managers():
     """Use temp directory and reset both manager singletons."""
     import gc
 
-    import aqua_mcp.tools as tools_module
+    import aqua.tools as tools_module
 
     with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmpdir:
         storage = Storage(Path(tmpdir))
-        from aqua_mcp.wallet import WalletManager
+        from aqua.wallet import WalletManager
 
         manager = WalletManager(storage=storage)
         btc_manager = BitcoinWalletManager(storage=storage)
@@ -93,7 +93,7 @@ class TestBitcoinWalletManager:
 
     def test_same_mnemonic_different_addresses_btc_vs_liquid(self, isolated_managers):
         """Same mnemonic produces different receive addresses for BTC vs Liquid."""
-        from aqua_mcp.tools import lw_address
+        from aqua.tools import lw_address
 
         lw_import_mnemonic(mnemonic=TEST_MNEMONIC, wallet_name="diff", network="mainnet")
         with patch.object(get_btc_manager(), "sync_wallet"):
@@ -256,7 +256,7 @@ class TestUnifiedImportAndBalance:
 class TestBitcoinToolRegistry:
     def test_btc_tools_registered(self):
         """btc_* and unified_balance are in TOOLS."""
-        from aqua_mcp.tools import TOOLS
+        from aqua.tools import TOOLS
 
         assert "btc_balance" in TOOLS
         assert "btc_address" in TOOLS
@@ -266,7 +266,7 @@ class TestBitcoinToolRegistry:
 
     def test_btc_tools_callable(self):
         """All btc_* and unified_balance are callable."""
-        from aqua_mcp.tools import TOOLS
+        from aqua.tools import TOOLS
 
         for name in ("btc_balance", "btc_address", "btc_transactions", "btc_send", "unified_balance"):
             assert callable(TOOLS[name]), f"{name} is not callable"

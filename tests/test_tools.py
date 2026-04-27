@@ -7,8 +7,8 @@ from unittest.mock import MagicMock, patch
 import lwk
 import pytest
 
-from aqua_mcp.storage import Storage, WalletData
-from aqua_mcp.tools import (
+from aqua.storage import Storage, WalletData
+from aqua.tools import (
     _manager,
     delete_wallet,
     get_manager,
@@ -23,7 +23,7 @@ from aqua_mcp.tools import (
     lw_send_asset,
     lw_transactions,
 )
-from aqua_mcp.wallet import WalletManager
+from aqua.wallet import WalletManager
 
 # Test mnemonic (well-known, NOT real funds)
 TEST_MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
@@ -32,7 +32,7 @@ TEST_MNEMONIC = "abandon abandon abandon abandon abandon abandon abandon abandon
 @pytest.fixture(autouse=True)
 def isolated_manager():
     """Replace the global manager with one using a temp directory for every test."""
-    import aqua_mcp.tools as tools_module
+    import aqua.tools as tools_module
 
     with tempfile.TemporaryDirectory() as tmpdir:
         storage = Storage(Path(tmpdir))
@@ -690,7 +690,7 @@ class TestWalletManagerInternals:
 class TestToolRegistry:
     def test_all_tools_registered(self):
         """All MCP tools are in the TOOLS registry."""
-        from aqua_mcp.tools import TOOLS
+        from aqua.tools import TOOLS
 
         expected = {
             "lw_generate_mnemonic",
@@ -719,7 +719,7 @@ class TestToolRegistry:
 
     def test_all_tools_are_callable(self):
         """Every registered tool is a callable."""
-        from aqua_mcp.tools import TOOLS
+        from aqua.tools import TOOLS
 
         for name, fn in TOOLS.items():
             assert callable(fn), f"Tool {name} is not callable"
@@ -761,8 +761,8 @@ class TestDeleteWallet:
 
     def test_delete_clears_btc_manager_caches(self, isolated_manager):
         """Bitcoin manager caches (_wallets/_persisters/_networks) are cleared."""
-        import aqua_mcp.tools as tools_module
-        from aqua_mcp.tools import get_btc_manager
+        import aqua.tools as tools_module
+        from aqua.tools import get_btc_manager
 
         lw_import_mnemonic(mnemonic=TEST_MNEMONIC, wallet_name="btccached", network="testnet")
         btc = get_btc_manager()

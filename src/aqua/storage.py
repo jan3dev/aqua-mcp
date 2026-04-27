@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives.kdf.pbkdf2 import PBKDF2HMAC
 SALT_LENGTH = 16
 
 
-DEFAULT_DIR = Path.home() / ".aqua-mcp"
+DEFAULT_DIR = Path.home() / ".aqua"
 SWAP_ID_PATTERN = re.compile(r"^[a-zA-Z0-9_-]{1,128}$")
 
 

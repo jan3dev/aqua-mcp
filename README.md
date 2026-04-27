@@ -1,6 +1,6 @@
-# AQUA MCP
+# Agentic AQUA
 
-MCP server for managing **Liquid Network** and **Bitcoin** wallets through AI assistants like Claude. One mnemonic backs both networks (unified wallet).
+MCP server and CLI for managing **Liquid Network** and **Bitcoin** wallets through AI assistants like Claude. One mnemonic backs both networks (unified wallet). Also can operates on Lightning network via Boltz swaps.
 
 ## Features
 
@@ -18,7 +18,7 @@ MCP server for managing **Liquid Network** and **Bitcoin** wallets through AI as
 > **Quickest way:** just ask your AI agent directly:
 >
 > ```
-> Install this MCP server: https://github.com/jan3dev/aqua-mcp
+> Install this MCP server: https://github.com/jan3dev/agentic-aqua
 > ```
 
 ### Recommended (uvx)
@@ -38,9 +38,9 @@ Configure Claude Desktop (`~/.claude/claude_desktop_config.json`):
 ```json
 {
   "mcpServers": {
-    "aqua-mcp": {
+    "agentic-aqua": {
       "command": "/full/path/to/uvx",
-      "args": ["aqua-mcp"]
+      "args": ["agentic-aqua"]
     }
   }
 }
@@ -60,8 +60,8 @@ Restart Claude Desktop and you're ready to use Bitcoin and Liquid wallets.
 Clone and install from source:
 
 ```bash
-git clone https://github.com/jan3dev/aqua-mcp.git
-cd aqua-mcp
+git clone https://github.com/jan3dev/agentic-aqua.git
+cd agentic-aqua
 uv sync
 ```
 
@@ -70,9 +70,9 @@ Configure Claude Desktop using the full path to `uv` (find with `which uv`):
 ```json
 {
   "mcpServers": {
-    "aqua-mcp": {
+    "agentic-aqua": {
       "command": "/full/path/to/uv",
-      "args": ["run", "--directory", "/absolute/path/to/aqua-mcp", "python", "-m", "aqua_mcp.server"]
+      "args": ["run", "--directory", "/absolute/path/to/agentic-aqua", "python", "-m", "aqua.server"]
     }
   }
 }
@@ -137,9 +137,110 @@ Once connected, you can ask Claude to:
 | `lightning_send` | Pay a Lightning invoice using L-BTC via Boltz (~0.1% fee) |
 | `lightning_transaction_status` | Check status of a Lightning swap (send or receive) |
 
+## CLI
+
+Agentic AQUA also ships with a Click-based CLI (`aqua`) for direct, scriptable wallet operations. It exposes the same operations as the MCP tools.
+
+```bash
+# Discover commands
+aqua --help
+aqua wallet --help
+aqua btc --help
+aqua liquid --help
+aqua lightning --help
+
+# Wallet management
+aqua wallet generate-mnemonic
+aqua wallet import-mnemonic --wallet-name default --network mainnet
+aqua wallet list
+aqua wallet export-descriptor --wallet-name default
+aqua wallet delete --wallet-name old
+
+# Balances
+aqua balance                              # unified (BTC + Liquid)
+aqua btc balance --wallet-name default
+aqua liquid balance --wallet-name default
+
+# Receive addresses
+aqua btc address
+aqua liquid address
+
+# Send (--wallet-name is required for on-chain sends)
+aqua btc send    --wallet-name default --address bc1... --amount 10000
+aqua liquid send --wallet-name default --address lq1... --amount 50000
+aqua liquid send-asset --wallet-name default --address lq1... --amount 1000000 --asset-id <asset_id>
+# (or use --asset-ticker USDt instead of --asset-id)
+
+# Transaction history & status
+aqua btc transactions
+aqua liquid transactions
+aqua liquid tx-status --tx <txid|explorer_url>
+
+# Lightning (L-BTC via Boltz / Ankara)
+aqua lightning receive --amount 50000
+aqua lightning send --invoice lnbc...
+aqua lightning status --swap-id <id>
+
+# Run as MCP stdio server
+aqua serve       # recommended
+aqua-mcp         # direct MCP entrypoint
+```
+
+Output defaults to a human-readable table on the terminal and JSON when piped. Force a format with `--format json` or `--format pretty`.
+
+### Loading mnemonics safely (env vars from a text file)
+
+Avoid pasting mnemonics into shell prompts or chat with an AI agent — both shell history and agent transcripts may persist them. The recommended workflow is to keep secrets in a local text file with restricted permissions and load them as environment variables.
+
+1. Create `~/.aqua/secrets.env` (or any path you prefer) and lock it down:
+
+   ```bash
+   mkdir -p ~/.aqua
+   cat > ~/.aqua/secrets.env <<'EOF'
+   AQUA_MNEMONIC="abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+   AQUA_PASSWORD="Wild-red-dolphin-386"
+   EOF
+   chmod 600 ~/.aqua/secrets.env
+   ```
+
+2. Source it before running CLI commands and clear it afterwards:
+
+   ```bash
+   set -a; . ~/.aqua/secrets.env; set +a
+   aqua-cli wallet import-mnemonic --wallet-name default --network mainnet
+   unset AQUA_MNEMONIC AQUA_PASSWORD
+   ```
+
+   `aqua-cli` also auto-loads a `.env` file from the project root via `python-dotenv` if you prefer a per-project file.
+
+The CLI honors these variables out of the box:
+
+| Variable | Used by |
+|----------|---------|
+| `AQUA_MNEMONIC` | `wallet import-mnemonic` |
+| `AQUA_PASSWORD` | `wallet import-mnemonic`, `btc send`, `liquid send`, `liquid send-asset`, `lightning send`, `lightning receive` |
+| `AQUA_<OPTION>` | Any CLI option (Click `auto_envvar_prefix="AQUA"`) — e.g. `AQUA_WALLET_NAME=default` |
+
+If you would rather pipe secrets from a password manager, every secret-bearing command also accepts `--mnemonic-stdin` / `--password-stdin`:
+
+```bash
+pass show crypto/aqua-mnemonic | aqua-cli wallet import-mnemonic --mnemonic-stdin
+```
+
+Tips:
+- Never commit `.env` or `secrets.env` files (the project's `.gitignore` already excludes them).
+- Prefer `set -a; . file; set +a` over `export $(cat file)` — the former tolerates spaces and quotes inside values.
+- After importing a wallet, the mnemonic is no longer needed for day-to-day operations; only `AQUA_PASSWORD` is used to sign transactions.
+
 ## Configuration
 
-Default config location: `~/.aqua-mcp/config.json`
+Default config location: `~/.aqua/config.json`
+
+> **Migrating from `aqua-mcp`?** The config dir moved from `~/.aqua-mcp` to `~/.aqua`. There is no automatic migration. To carry over your wallets, run once:
+>
+> ```bash
+> mv ~/.aqua-mcp ~/.aqua
+> ```
 
 ```json
 {

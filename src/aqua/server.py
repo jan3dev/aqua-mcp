@@ -407,7 +407,7 @@ TOOL_SCHEMAS = {
 def create_server() -> Server:
     """Create and configure the MCP server."""
     server = Server(
-        "aqua-mcp",
+        "agentic-aqua",
         instructions="""You are managing Bitcoin and Liquid Network cryptocurrency wallets.
 
 STARTUP BEHAVIOR:
@@ -933,7 +933,7 @@ Please:
             Resource(
                 uri="aqua://docs/quickstart",
                 name="Quick Start Guide",
-                description="Getting started with AQUA MCP wallet management",
+                description="Getting started with Agentic AQUA wallet management",
                 mimeType="text/markdown",
             ),
             Resource(
@@ -954,7 +954,7 @@ Please:
     async def read_resource(uri: str) -> str:
         """Read a documentation resource."""
         if uri == "aqua://docs/quickstart":
-            return """# AQUA MCP Quick Start
+            return """# Agentic AQUA Quick Start
 
 ## Creating a New Wallet (Recommended Method)
 
@@ -1158,7 +1158,7 @@ async def run_server():
     server = create_server()
 
     async with stdio_server() as (read_stream, write_stream):
-        logger.info(f"AQUA MCP v{__version__} starting...")
+        logger.info(f"Agentic AQUA v{__version__} starting...")
         await server.run(
             read_stream,
             write_stream,
