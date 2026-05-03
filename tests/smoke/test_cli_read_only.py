@@ -143,7 +143,7 @@ class TestSmokeListWallets:
 class TestSmokeExportDescriptor:
     def test_export_descriptor(self, cli_runner, wallet_name):
         """Export descriptor returns a CT descriptor string."""
-        result = cli_runner("wallet", "export-descriptor", "--wallet-name", wallet_name)
+        result = cli_runner("liquid", "export-descriptor", "--wallet-name", wallet_name)
         assert "descriptor" in result
         assert result["descriptor"].startswith("ct(")
 
