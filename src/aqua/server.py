@@ -39,7 +39,7 @@ TOOL_SCHEMAS = {
         },
     },
     "lw_import_mnemonic": {
-        "description": "Import a wallet from a BIP39 mnemonic phrase",
+        "description": "Import a wallet from a BIP39 mnemonic phrase (creates both Liquid and Bitcoin wallets from the same mnemonic)",
         "inputSchema": {
             "type": "object",
             "properties": {
