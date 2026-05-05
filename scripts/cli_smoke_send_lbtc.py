@@ -134,7 +134,7 @@ def run_suite(label: str, password: str | None):
             result = run_cli("liquid", "tx-status", "--tx", state["txid"])
             if result is not None:
                 break
-            print(f"  Indexer not ready yet (attempt {attempt + 1}/10), retrying in 3s...")
+            print(f"  Indexer not ready yet (attempt {attempt + 1}/5), retrying in 3s...")
             time.sleep(3)
         assert result is not None, "Status check failed after retries"
         print(f"  Status: {result.get('status')}")
