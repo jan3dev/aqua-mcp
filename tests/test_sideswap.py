@@ -907,6 +907,73 @@ class TestVerifyPsetBalances:
                 {}, send_asset=L_BTC, send_amount=1, recv_asset=USDT, recv_amount=0
             )
 
+    # -- Reverse direction (asset → L-BTC) ------------------------------------
+    # The dealer absorbs the network fee from their L-BTC contribution, so the
+    # wallet's effect is exact on BOTH sides: -send_amount of asset, +recv_amount
+    # of L-BTC. The fee tolerance must NOT relax the asset-side constraint —
+    # otherwise a hostile server could siphon up to fee_tolerance_sats of asset.
+
+    def test_reverse_exact_match_with_fee_asset_lbtc_passes(self):
+        verify_pset_balances(
+            {USDT: -9_500_000, L_BTC: 100_000},
+            send_asset=USDT,
+            send_amount=9_500_000,
+            recv_asset=L_BTC,
+            recv_amount=100_000,
+            fee_asset=L_BTC,  # fee always lives on policy asset
+        )
+
+    def test_reverse_extra_asset_taken_rejected_even_within_tolerance(self):
+        # If fee_asset defaulted to send_asset (USDT) the verifier would let
+        # a 1000-sat USDT siphon through. Pinning fee_asset=L_BTC blocks it.
+        with pytest.raises(PsetVerificationError, match="more than the agreed"):
+            verify_pset_balances(
+                {USDT: -9_500_500, L_BTC: 100_000},
+                send_asset=USDT,
+                send_amount=9_500_000,
+                recv_asset=L_BTC,
+                recv_amount=100_000,
+                fee_tolerance_sats=1_000,
+                fee_asset=L_BTC,
+            )
+
+    def test_reverse_short_lbtc_recv_rejected(self):
+        with pytest.raises(PsetVerificationError, match="delivers 99000"):
+            verify_pset_balances(
+                {USDT: -9_500_000, L_BTC: 99_000},
+                send_asset=USDT,
+                send_amount=9_500_000,
+                recv_asset=L_BTC,
+                recv_amount=100_000,
+                fee_asset=L_BTC,
+            )
+
+    def test_reverse_unrelated_asset_movement_rejected(self):
+        with pytest.raises(PsetVerificationError, match="unexpectedly moves"):
+            verify_pset_balances(
+                {USDT: -9_500_000, L_BTC: 100_000, EVIL: -1},
+                send_asset=USDT,
+                send_amount=9_500_000,
+                recv_asset=L_BTC,
+                recv_amount=100_000,
+                fee_asset=L_BTC,
+            )
+
+    def test_default_fee_asset_is_send_asset_documented_behavior(self):
+        # Sanity-check: the default behavior is that fee_asset == send_asset.
+        # Callers who care about the reverse direction MUST pass fee_asset=L_BTC.
+        # Without it, a 1000-sat USDT siphon would be accepted — this test
+        # documents that requirement.
+        verify_pset_balances(
+            {USDT: -9_500_500, L_BTC: 100_000},
+            send_asset=USDT,
+            send_amount=9_500_000,
+            recv_asset=L_BTC,
+            recv_amount=100_000,
+            fee_tolerance_sats=1_000,
+            # fee_asset NOT specified — defaults to send_asset (USDT)
+        )
+
     def test_negative_fee_tolerance_rejected(self):
         with pytest.raises(ValueError):
             verify_pset_balances(
@@ -1449,7 +1516,7 @@ class TestSwapManagerExecute:
     def test_rejects_swap_lbtc_for_lbtc(self, swap_manager_setup):
         mgr, _, _, _, _ = swap_manager_setup
         with _patch_swap_layers():
-            with pytest.raises(ValueError, match="Cannot swap L-BTC for L-BTC"):
+            with pytest.raises(ValueError, match="non-L-BTC"):
                 mgr.execute_swap(
                     asset_id=L_BTC, send_amount=100_000, wallet_name="default"
                 )
@@ -1494,3 +1561,168 @@ class TestSwapManagerExecute:
         mgr, _, _, _, _ = swap_manager_setup
         with pytest.raises(ValueError, match="not found"):
             mgr.status("doesnotexist")
+
+
+class TestSwapManagerReverseExecute:
+    """Reverse direction: asset → L-BTC.
+
+    The dealer absorbs the network fee from their L-BTC contribution, so the
+    wallet's effect is exact on both sides: -send_amount of asset and
+    +recv_amount of L-BTC. Crucially, the verifier must NOT allow any siphon
+    of the asset side via fee_tolerance — `fee_asset` is pinned to L-BTC.
+    """
+
+    def _ws_responses_reverse_quote(self):
+        FakeWSClient.responses["subscribe_price_stream"] = {
+            "asset": USDT,
+            "send_bitcoins": False,
+            "send_amount": 9_500_000,
+            "recv_amount": 100_000,
+            "price": 95.0,
+            "fixed_fee": 100,
+        }
+        FakeWSClient.responses["start_swap_web"] = {
+            "order_id": "ord_reverse",
+            "send_asset": USDT,
+            "send_amount": 9_500_000,
+            "recv_asset": L_BTC,
+            "recv_amount": 100_000,
+            "upload_url": "https://api-testnet.sideswap.io/upload/foo",
+        }
+        FakeWSClient.responses["unsubscribe_price_stream"] = {}
+
+    def test_reverse_happy_path_end_to_end(self, swap_manager_setup):
+        mgr, _, fake_wollet, fake_signer, storage = swap_manager_setup
+        # Wallet now holds USDt UTXOs and pset_details reflects the reverse
+        # direction's exact balance (no fee on either side; dealer absorbs)
+        fake_wollet._utxos = [_FakeUtxo("aa" * 32, 0, USDT, 50_000_000)]
+        fake_wollet._balances = {USDT: -9_500_000, L_BTC: 100_000}
+        self._ws_responses_reverse_quote()
+
+        with _patch_swap_layers():
+            swap = mgr.execute_swap(
+                asset_id=USDT,
+                send_amount=9_500_000,
+                wallet_name="default",
+                send_bitcoins=False,
+            )
+
+        assert swap.status == "broadcast"
+        assert swap.send_asset == USDT
+        assert swap.send_amount == 9_500_000
+        assert swap.recv_asset == L_BTC
+        assert swap.recv_amount == 100_000
+        # Must have signed and submitted
+        assert len(fake_signer.signed) == 1
+        assert _FakeHTTPClient.last_swap_sign_call is not None
+        # Manager should have asked SideSwap with send_bitcoins=False
+        ws_calls = {m: p for m, p in FakeWSClient.calls}
+        assert ws_calls["subscribe_price_stream"]["send_bitcoins"] is False
+        assert ws_calls["start_swap_web"]["send_bitcoins"] is False
+        # Persisted
+        loaded = storage.load_sideswap_swap("ord_reverse")
+        assert loaded is not None
+        assert loaded.send_asset == USDT
+        assert loaded.recv_asset == L_BTC
+
+    def test_reverse_aborts_on_asset_siphon_within_lbtc_tolerance(self, swap_manager_setup):
+        # The hostile case: server crafts a PSET that takes 9_500_500 USDT
+        # (500 sat siphon) but delivers the agreed L-BTC. If fee_asset were
+        # accidentally USDT, the 1000-sat tolerance would let this through.
+        # We ensure fee_asset is pinned to L-BTC, so the asset side is exact.
+        mgr, _, fake_wollet, fake_signer, _ = swap_manager_setup
+        fake_wollet._utxos = [_FakeUtxo("aa" * 32, 0, USDT, 50_000_000)]
+        fake_wollet._balances = {USDT: -9_500_500, L_BTC: 100_000}  # siphon 500 USDT
+        self._ws_responses_reverse_quote()
+
+        with _patch_swap_layers():
+            with pytest.raises(PsetVerificationError, match="more than the agreed"):
+                mgr.execute_swap(
+                    asset_id=USDT,
+                    send_amount=9_500_000,
+                    wallet_name="default",
+                    send_bitcoins=False,
+                )
+        # And critically: did NOT sign, did NOT submit
+        assert len(fake_signer.signed) == 0
+        assert _FakeHTTPClient.last_swap_sign_call is None
+
+    def test_reverse_aborts_on_short_lbtc_delivery(self, swap_manager_setup):
+        mgr, _, fake_wollet, fake_signer, _ = swap_manager_setup
+        fake_wollet._utxos = [_FakeUtxo("aa" * 32, 0, USDT, 50_000_000)]
+        # Server delivers 99k L-BTC instead of 100k
+        fake_wollet._balances = {USDT: -9_500_000, L_BTC: 99_000}
+        self._ws_responses_reverse_quote()
+
+        with _patch_swap_layers():
+            with pytest.raises(PsetVerificationError, match="delivers 99000"):
+                mgr.execute_swap(
+                    asset_id=USDT,
+                    send_amount=9_500_000,
+                    wallet_name="default",
+                    send_bitcoins=False,
+                )
+        assert len(fake_signer.signed) == 0
+
+    def test_reverse_aborts_on_unrelated_asset_movement(self, swap_manager_setup):
+        mgr, _, fake_wollet, fake_signer, _ = swap_manager_setup
+        fake_wollet._utxos = [_FakeUtxo("aa" * 32, 0, USDT, 50_000_000)]
+        fake_wollet._balances = {USDT: -9_500_000, L_BTC: 100_000, EVIL: -1}
+        self._ws_responses_reverse_quote()
+
+        with _patch_swap_layers():
+            with pytest.raises(PsetVerificationError, match="unexpectedly moves"):
+                mgr.execute_swap(
+                    asset_id=USDT,
+                    send_amount=9_500_000,
+                    wallet_name="default",
+                    send_bitcoins=False,
+                )
+        assert len(fake_signer.signed) == 0
+
+    def test_reverse_picks_asset_utxos_not_lbtc(self, swap_manager_setup):
+        mgr, _, fake_wollet, _, _ = swap_manager_setup
+        # Wallet has both USDt and L-BTC; manager must select USDT only.
+        fake_wollet._utxos = [
+            _FakeUtxo("aa" * 32, 0, L_BTC, 5_000_000),
+            _FakeUtxo("bb" * 32, 0, USDT, 50_000_000),
+        ]
+        fake_wollet._balances = {USDT: -9_500_000, L_BTC: 100_000}
+        self._ws_responses_reverse_quote()
+
+        with _patch_swap_layers():
+            mgr.execute_swap(
+                asset_id=USDT,
+                send_amount=9_500_000,
+                wallet_name="default",
+                send_bitcoins=False,
+            )
+        sent_inputs = _FakeHTTPClient.last_swap_start_call["inputs"]
+        assert all(u["asset"] == USDT for u in sent_inputs)
+        assert len(sent_inputs) == 1
+
+    def test_reverse_insufficient_asset_balance_raises(self, swap_manager_setup):
+        mgr, _, fake_wollet, _, _ = swap_manager_setup
+        fake_wollet._utxos = [_FakeUtxo("aa" * 32, 0, USDT, 1_000_000)]  # only 1M USDT
+        fake_wollet._balances = {USDT: -9_500_000, L_BTC: 100_000}
+        self._ws_responses_reverse_quote()
+
+        with _patch_swap_layers():
+            with pytest.raises(ValueError, match="Insufficient confidential balance"):
+                mgr.execute_swap(
+                    asset_id=USDT,
+                    send_amount=9_500_000,
+                    wallet_name="default",
+                    send_bitcoins=False,
+                )
+
+    def test_reverse_rejects_lbtc_as_asset_id(self, swap_manager_setup):
+        mgr, _, _, _, _ = swap_manager_setup
+        with _patch_swap_layers():
+            with pytest.raises(ValueError, match="non-L-BTC"):
+                mgr.execute_swap(
+                    asset_id=L_BTC,
+                    send_amount=100_000,
+                    wallet_name="default",
+                    send_bitcoins=False,
+                )

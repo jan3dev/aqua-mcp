@@ -1020,22 +1020,26 @@ def sideswap_execute_swap(
     send_amount: int,
     wallet_name: str = "default",
     password: str | None = None,
+    send_bitcoins: bool = True,
 ) -> dict[str, Any]:
-    """Execute a Liquid atomic swap of L-BTC for an asset on SideSwap.
+    """Execute a Liquid atomic swap on SideSwap. Both directions are supported.
 
-    Currently L-BTC → asset only (e.g. L-BTC → USDt). The reverse direction
-    is not yet supported in agentic-aqua and will raise an error from the
-    server; for asset → L-BTC, direct the user to the AQUA mobile wallet
-    or sideswap.io.
+    Direction is controlled by `send_bitcoins`:
 
-    Flow:
+    - `send_bitcoins=True` (default): user sends L-BTC and receives `asset_id`
+      (e.g. L-BTC → USDt). `send_amount` is in L-BTC sats.
+    - `send_bitcoins=False`: user sends `asset_id` and receives L-BTC
+      (e.g. USDt → L-BTC). `send_amount` is in `asset_id` sats.
+
+    Flow (both directions):
       1. Subscribe to a price stream and capture a quote at the current price
       2. Submit start_swap_web with the captured price; receive an upload_url
-      3. Select confidential UTXOs of L-BTC covering send_amount
+      3. Select confidential UTXOs of `send_asset` covering `send_amount`
       4. POST swap_start to receive the half-built PSET
       5. **Verify the PSET locally** against the agreed quote — refuses to
-         sign if recv_asset balance ≠ recv_amount, or send_asset is over-deducted,
-         or any unrelated asset moves
+         sign if recv_asset balance ≠ recv_amount, send_asset is over-deducted,
+         or any unrelated asset moves. The fee tolerance only applies to L-BTC,
+         so the asset side is always checked at strict equality.
       6. Sign the PSET locally
       7. POST swap_sign — server merges and broadcasts; returns the txid
 
@@ -1043,10 +1047,12 @@ def sideswap_execute_swap(
     sideswap_swap_status with the returned order_id.
 
     Args:
-        asset_id: Liquid asset ID to receive (e.g. USDt)
-        send_amount: L-BTC sats to send
+        asset_id: The non-L-BTC Liquid asset (e.g. USDt). The L-BTC side is
+            always the policy asset of the wallet's network.
+        send_amount: Send amount in sats (L-BTC if send_bitcoins, else asset).
         wallet_name: Liquid wallet to sign with. Default: "default"
         password: Password to decrypt mnemonic (if encrypted at rest)
+        send_bitcoins: True = L-BTC → asset; False = asset → L-BTC.
 
     Returns:
         order_id, submit_id, send_asset, send_amount, recv_asset, recv_amount,
@@ -1060,6 +1066,7 @@ def sideswap_execute_swap(
         send_amount=send_amount,
         wallet_name=wallet_name,
         password=password,
+        send_bitcoins=send_bitcoins,
     )
     return {
         "order_id": swap.order_id,
@@ -1076,7 +1083,7 @@ def sideswap_execute_swap(
         "message": (
             f"Swap broadcast (txid={swap.txid}). Check confirmation status with "
             f"lw_tx_status. The PSET was verified locally against the quote — "
-            f"the wallet will receive exactly {swap.recv_amount} sats of recv_asset."
+            f"the wallet receives exactly {swap.recv_amount} sats of recv_asset."
         ),
     }
 

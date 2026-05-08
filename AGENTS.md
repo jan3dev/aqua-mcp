@@ -86,7 +86,7 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 | `sideswap_recommend` | Recommend peg vs swap-market for a BTC ↔ L-BTC conversion. Surfaces time-vs-fee trade-off and warns if amount exceeds hot-wallet liquidity. | `amount` (sats), `direction`: btc_to_lbtc/lbtc_to_btc, `network`: optional |
 | `sideswap_list_assets` | List Liquid assets supported by SideSwap (USDt, EURx, MEX, DePix, etc.). | `network`: optional |
 | `sideswap_quote` | Read-only price quote for a Liquid asset swap (e.g. L-BTC ↔ USDt). Use BEFORE `sideswap_execute_swap` to confirm price with user. | `asset_id`, `send_amount` (sats) OR `recv_amount` (sats), `send_bitcoins`: optional, `network`: optional |
-| `sideswap_execute_swap` | Execute an atomic swap of L-BTC for an asset. PSET is verified locally against the agreed quote before signing — refuses to sign if balance does not match exactly. **L-BTC → asset only**; reverse direction not supported (use AQUA mobile). | `asset_id`, `send_amount` (sats), `wallet_name`: optional, `password`: optional |
+| `sideswap_execute_swap` | Execute an atomic Liquid swap. Both directions supported via `send_bitcoins`: True = L-BTC → asset; False = asset → L-BTC. PSET verified locally against the agreed quote before signing; fee tolerance pinned to L-BTC so the asset side is always strict equality. | `asset_id`, `send_amount` (sats), `send_bitcoins`: optional (default true), `wallet_name`: optional, `password`: optional |
 | `sideswap_swap_status` | Get persisted status of an atomic swap. Pass the txid to `lw_tx_status` for on-chain confirmation. | `order_id`: string |
 
 > ⚠️ **Pegs vs swaps**: pegs charge 0.1% (vs 0.2% for instant swap-market trades) but require waiting for confirmations. Always call `sideswap_recommend` for amounts ≥ 0.01 BTC and surface the trade-off (and any 102-confirmation cold-wallet warning) before initiating a peg-in.
@@ -345,16 +345,21 @@ SideSwap (`sideswap.io`) provides BTC ↔ L-BTC pegs and Liquid asset swaps via 
 - Peg-in: 2 BTC confs (~20 min) hot-wallet path; 102 BTC confs (~17 hours) if amount exceeds `PegInWalletBalance`
 - Peg-out: 2 Liquid confs + federation BTC sweep (typically 15–60 min total)
 
-**Asset swap execution** (`sideswap_execute_swap`) supports the legacy `start_swap_web` + HTTP `swap_start`/`swap_sign` flow with **local PSET verification before signing**. Direction is currently L-BTC → asset only.
+**Asset swap execution** (`sideswap_execute_swap`) supports the legacy `start_swap_web` + HTTP `swap_start`/`swap_sign` flow in **both directions**:
+
+- **L-BTC → asset** (`send_bitcoins=True`): user's L-BTC change pays the network fee. Wallet net effect: `L-BTC: -(send_amount + fee)`, `asset: +recv_amount`.
+- **asset → L-BTC** (`send_bitcoins=False`): SideSwap dealer absorbs the network fee from their L-BTC contribution. Wallet net effect: `asset: -send_amount` (exact), `L-BTC: +recv_amount` (exact).
 
 **Verification rules** (`verify_pset_balances` in `src/aqua/sideswap.py`):
 1. Wallet must gain *exactly* `recv_amount` of `recv_asset`.
-2. Wallet must lose at most `send_amount + fee_tolerance_sats` (default 1000) of `send_asset`.
+2. Wallet must lose at most `send_amount + fee_tolerance_sats` (default 1000) of `send_asset` *if* `send_asset == fee_asset`; otherwise strict equality.
 3. No other asset may have a non-zero balance change.
+
+The manager always passes `fee_asset = policy_asset` (L-BTC) regardless of direction, so the fee tolerance only relaxes constraints on the L-BTC side — never on a non-L-BTC asset, which would otherwise be a siphon vector on the reverse path.
 
 If any rule fails, `PsetVerificationError` is raised and signing is aborted — the order is persisted as `failed` for forensics. The order is also persisted at every flow step (`pending` → `verified` → `signed` → `broadcast`) for crash recovery.
 
-UTXO selection (`select_swap_utxos`): confidential (asset_bf and value_bf both non-zero), holding the requested send_asset, sorted descending by value, accumulated to cover `send_amount`. wpkh-only (matching the wallet's BIP84 m/84'/1776'/0' descriptor).
+UTXO selection (`select_swap_utxos`): confidential (asset_bf and value_bf both non-zero), holding the requested send_asset, sorted descending by value, accumulated to cover `send_amount`. wpkh-only (matching the wallet's BIP84 m/84'/1776'/0' descriptor). No separate L-BTC fee inputs are required on either direction (mirroring AQUA Flutter's `swap_provider.dart`).
 
 ## Bitcoin Implementation Details
 

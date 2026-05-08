@@ -37,10 +37,18 @@ send_asset loses no more than send_amount + fee_tolerance, no other assets
 move). The server is trusted-but-verify; without this check, a hostile or
 buggy server could craft a PSET that takes our funds and pays us nothing.
 
-Execution (`SideSwapSwapManager.execute_swap`) currently supports only the
-L-BTC → asset direction (`send_bitcoins=True`). The reverse direction needs
-careful fee handling and is excluded; users should use the AQUA mobile app
-or sideswap.io for asset → L-BTC swaps until that's implemented and audited.
+Execution (`SideSwapSwapManager.execute_swap`) supports both directions:
+
+  - `send_bitcoins=True`: L-BTC → asset (e.g. L-BTC → USDt). The Liquid network
+    fee comes out of the user's L-BTC change output, so the wallet's L-BTC
+    delta is `-(send_amount + fee)`.
+  - `send_bitcoins=False`: asset → L-BTC (e.g. USDt → L-BTC). The dealer
+    absorbs the network fee from their L-BTC contribution, so the wallet's
+    asset delta is `-send_amount` and L-BTC delta is `+recv_amount` exactly.
+
+The verifier's `fee_asset` parameter is always pinned to the policy asset so
+the fee tolerance only relaxes constraints on the L-BTC side — never on a
+non-L-BTC asset, which would otherwise be a siphon vector on the reverse path.
 """
 
 from __future__ import annotations
@@ -1179,23 +1187,41 @@ class SideSwapSwapManager:
         send_amount: int,
         wallet_name: str = "default",
         password: Optional[str] = None,
+        send_bitcoins: bool = True,
         *,
         fee_tolerance_sats: int = DEFAULT_FEE_TOLERANCE_SATS,
         quote_wait_seconds: float = QUOTE_WAIT_SECONDS,
     ) -> "SideSwapSwap":
-        """Execute a swap of L-BTC for `asset_id` (i.e. `send_bitcoins=True`).
+        """Execute a Liquid atomic swap on SideSwap.
 
-        Only L-BTC → asset is supported in this version. The reverse direction
-        (asset → L-BTC) needs more thought re: fee handling and is intentionally
-        excluded; the user should be directed to the AQUA mobile app for that.
+        Two directions are supported:
+
+        - **`send_bitcoins=True`** (forward, default): user sends L-BTC and
+          receives `asset_id` (e.g. L-BTC → USDt). The Liquid network fee is
+          deducted from the user's L-BTC change output, so the wallet's L-BTC
+          delta is `-(send_amount + fee)` and `recv_asset` delta is
+          `+recv_amount` exactly.
+
+        - **`send_bitcoins=False`** (reverse): user sends `asset_id` and
+          receives L-BTC (e.g. USDt → L-BTC). The Liquid network fee is
+          absorbed by the SideSwap dealer's L-BTC contribution, so the
+          wallet's `send_asset` delta is `-send_amount` exactly and L-BTC
+          delta is `+recv_amount` exactly.
+
+        In both cases the verifier sets `fee_asset` to L-BTC (the policy
+        asset), so the fee tolerance only relaxes constraints on the L-BTC
+        balance — never on the asset balance.
 
         Args:
-            asset_id: Liquid asset id to receive (e.g. USDt).
-            send_amount: L-BTC sats to send.
+            asset_id: The non-L-BTC asset id (e.g. USDt). The L-BTC side is
+                always the policy asset of the wallet's network.
+            send_amount: Send amount in sats. Denominated in L-BTC if
+                `send_bitcoins=True`, otherwise in `asset_id`.
             wallet_name: Wallet to sign with.
             password: Mnemonic decryption password (if encrypted at rest).
-            fee_tolerance_sats: Extra L-BTC sats we'll allow for the network
-                fee. Default 1000 — Liquid fees are tens of sats.
+            send_bitcoins: Direction. True = L-BTC → asset; False = asset → L-BTC.
+            fee_tolerance_sats: Extra L-BTC sats allowed for the network fee.
+                Default 1000 — Liquid fees are tens of sats.
             quote_wait_seconds: How long to wait for the streamed quote.
         """
         # Load wallet & validate signing capability
@@ -1218,9 +1244,16 @@ class SideSwapSwapManager:
         # Sync the wallet so utxos() reflects the current chain state
         self.wallet_manager.sync_wallet(wallet_name)
 
-        send_asset = self.wallet_manager._get_policy_asset(network)
-        if asset_id == send_asset:
-            raise ValueError("Cannot swap L-BTC for L-BTC")
+        policy_asset = self.wallet_manager._get_policy_asset(network)
+        if asset_id == policy_asset:
+            raise ValueError("asset_id must be a non-L-BTC Liquid asset")
+
+        # Resolve send/recv assets from direction. The fee always lives on the
+        # policy asset (L-BTC) regardless of direction.
+        if send_bitcoins:
+            send_asset, recv_asset = policy_asset, asset_id
+        else:
+            send_asset, recv_asset = asset_id, policy_asset
 
         async def _quote_and_start() -> tuple[dict, dict]:
             async with SideSwapWSClient(network) as client:
@@ -1228,7 +1261,7 @@ class SideSwapSwapManager:
                 # Get the streamed price quote
                 initial = await client.subscribe_price_stream(
                     asset=asset_id,
-                    send_bitcoins=True,
+                    send_bitcoins=send_bitcoins,
                     send_amount=send_amount,
                 )
                 quote = initial or {}
@@ -1247,7 +1280,7 @@ class SideSwapSwapManager:
                 start_resp = await client.start_swap_web(
                     asset=asset_id,
                     price=float(quote["price"]),
-                    send_bitcoins=True,
+                    send_bitcoins=send_bitcoins,
                     send_amount=int(quote["send_amount"]),
                     recv_amount=int(quote["recv_amount"]),
                 )
@@ -1271,7 +1304,7 @@ class SideSwapSwapManager:
             submit_id=None,
             send_asset=send_asset,
             send_amount=send_amount,
-            recv_asset=asset_id,
+            recv_asset=recv_asset,
             recv_amount=recv_amount,
             price=float(quote["price"]),
             wallet_name=wallet_name,
@@ -1282,7 +1315,11 @@ class SideSwapSwapManager:
         self.storage.save_sideswap_swap(swap)
 
         try:
-            # Build the inputs/addresses for swap_start
+            # Build the inputs/addresses for swap_start. AQUA Flutter selects
+            # only UTXOs of `send_asset` (no separate L-BTC fee inputs); the
+            # SideSwap dealer absorbs the network fee on the reverse direction
+            # and routes it through the user's L-BTC change on the forward
+            # direction. See `lib/features/sideswap/providers/swap_provider.dart`.
             wollet = self.wallet_manager._get_wollet(wallet_name)
             inputs = select_swap_utxos(wollet.utxos(), send_asset, send_amount)
             recv_addr = str(wollet.address(None).address())
@@ -1296,7 +1333,7 @@ class SideSwapSwapManager:
                 change_addr=change_addr,
                 send_asset=send_asset,
                 send_amount=send_amount,
-                recv_asset=asset_id,
+                recv_asset=recv_asset,
                 recv_amount=recv_amount,
             )
             submit_id = start_payload.get("submit_id")
@@ -1308,15 +1345,18 @@ class SideSwapSwapManager:
             swap.submit_id = submit_id
             self.storage.save_sideswap_swap(swap)
 
-            # Verify before signing — security-critical
+            # Verify before signing — security-critical. fee_asset is always
+            # the policy asset (L-BTC); when send_asset != L-BTC the fee
+            # tolerance does NOT relax the constraint on the asset side.
             self._verify_pset(
                 pset_b64,
                 wollet,
                 send_asset=send_asset,
                 send_amount=send_amount,
-                recv_asset=asset_id,
+                recv_asset=recv_asset,
                 recv_amount=recv_amount,
                 fee_tolerance_sats=fee_tolerance_sats,
+                fee_asset=policy_asset,
             )
             swap.status = "verified"
             self.storage.save_sideswap_swap(swap)
@@ -1364,6 +1404,7 @@ class SideSwapSwapManager:
         recv_asset: str,
         recv_amount: int,
         fee_tolerance_sats: int,
+        fee_asset: Optional[str] = None,
     ) -> None:
         """Run the PSET balance check via LWK and raise on mismatch."""
         import lwk
@@ -1379,6 +1420,7 @@ class SideSwapSwapManager:
             send_amount=send_amount,
             recv_asset=recv_asset,
             recv_amount=recv_amount,
+            fee_asset=fee_asset,
             fee_tolerance_sats=fee_tolerance_sats,
         )
 
