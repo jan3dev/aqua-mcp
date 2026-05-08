@@ -314,13 +314,13 @@ Ankara backend (`test.aquabtc.com`) provides Lightning → L-BTC swaps (receive 
 
 ## SideShift Integration
 
-SideShift.ai (`https://sideshift.ai/api/v2`) is a custodial multi-chain swap service. Used for cross-chain conversions where SideSwap can't help (e.g. anything involving Ethereum, Tron, Solana, USDt-on-other-chains, etc.).
+Technical detail for `src/aqua/sideshift.py`. Tool semantics, trust model, refund-address guidance, and memo-network warnings live in the **SideShift (Custodial Cross-Chain Swaps)** section under Tools.
 
-**API**: REST/JSON, anonymous (no auth), affiliate ID identifies us in request bodies.
+**API**: `https://sideshift.ai/api/v2`, REST/JSON, anonymous (no auth), affiliate ID identifies us in request bodies.
 
 **Affiliate ID**: `PVmPh4Mp3` — same one AQUA Flutter wallet ships with (publicly committed in their `lib/config/constants/api_keys.dart`). Commission accrues to JAN3's SideShift account. Pass an empty string to `SideShiftClient(affiliate_id="")` to disable affiliate identification (no commission).
 
-**Curated pair allowlist**: `ALLOWED_PAIRS` in `src/aqua/sideshift.py` mirrors AQUA Flutter's `SideshiftAsset` factories — USDt across 7 chains (ethereum, tron, bsc, solana, polygon, ton, liquid) plus BTC mainchain. `send_shift` / `receive_shift` validate both legs against this set; off-allowlist pairs raise `ValueError`. Set `SIDESHIFT_ALLOW_ALL_NETWORKS=1` to bypass. Drift from AQUA's list is detected by `tests/test_sideshift.py::TestAllowedPairs::test_allowlist_matches_aqua_flutter` so any change forces a conscious update of both sides.
+**Curated pair allowlist enforcement**: `ALLOWED_PAIRS` in `src/aqua/sideshift.py` is the source of truth. `send_shift` / `receive_shift` validate both legs and raise `ValueError` for off-allowlist pairs. Set `SIDESHIFT_ALLOW_ALL_NETWORKS=1` to bypass. Drift from AQUA Flutter's `SideshiftAsset` factories is detected by `tests/test_sideshift.py::TestAllowedPairs::test_allowlist_matches_aqua_flutter` so any change forces a conscious update on both sides.
 
 **Endpoints used**:
 - `GET /v2/coins` — supported coins + networks
@@ -336,12 +336,9 @@ SideShift.ai (`https://sideshift.ai/api/v2`) is a custodial multi-chain swap ser
 - L-BTC is identified as `coin: "BTC", network: "liquid"` (NOT `lbtc-liquid`).
 - USDt-Liquid is identified as `coin: "USDT", network: "liquid"`.
 - All amounts are decimal strings (e.g. `"0.0005"`, `"100"`) to preserve precision. The manager converts to integer sats internally before calling our wallet send methods.
+- Memo-network deposits surface as `depositMemo` in the order response. For sends targeting a memo-network settle chain, `settle_memo` must be supplied upfront.
 
 **Status state machine** (lowercase): `waiting` → `pending` → `processing` → `settling` → `settled` (success). Failure paths: `refund` → `refunding` → `refunded`, or `expired`. Helpers: `shift_is_final`, `shift_is_success`, `shift_is_failed`.
-
-**Trust model**: Custodial. SideShift takes the deposit and sends the converted asset from their hot wallet. This is NOT atomic — different from SideSwap (atomic on Liquid) or Lightning (Boltz, atomic). Always supply a refund address; the manager does this automatically on send (refunds back to the wallet's own deposit-chain address).
-
-**Memo networks**: TON, Stellar, BNB Beacon, etc. require a memo on either the deposit or settle side. SideShift returns `depositMemo` in the order response when the deposit chain needs one; surface it to the user prominently. For sends with `settle_memo`, the user must provide the memo upfront.
 
 **Deposit chain limitation**: We can only sign on Bitcoin and Liquid, so `sideshift_send` requires `deposit_network ∈ {bitcoin, liquid}`. For receives, only `settle_network ∈ {bitcoin, liquid}` (we hold addresses there). For everything else, the user provides an external address.
 
