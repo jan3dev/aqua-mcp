@@ -507,6 +507,7 @@ TOOL_SCHEMAS = {
                 "amount_from": {"type": "string", "description": "USDt-Liquid to send (decimal string, e.g. '100')"},
                 "wallet_name": {"type": "string", "default": "default"},
                 "password": {"type": "string", "description": "Password to decrypt mnemonic (if encrypted at rest)"},
+                "rate_id": {"type": "string", "description": "Rate id from a prior changelly_quote call — pass this to lock the previewed rate and avoid drift"},
             },
             "required": ["external_network", "settle_address", "amount_from"],
         },
@@ -533,10 +534,10 @@ TOOL_SCHEMAS = {
                 },
                 "amount_from": {
                     "type": "string",
-                    "description": "Optional reference amount for the quote preview",
+                    "description": "Amount the external sender will deposit (decimal string, e.g. '50')",
                 },
             },
-            "required": ["external_network"],
+            "required": ["external_network", "amount_from"],
         },
     },
     "changelly_status": {

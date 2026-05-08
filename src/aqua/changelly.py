@@ -43,11 +43,15 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import urllib.error
 import urllib.request
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
+from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Optional
+
+from .assets import lookup_asset_by_ticker
 
 logger = logging.getLogger(__name__)
 
@@ -131,6 +135,34 @@ def _check_pair_allowed(from_id: str, to_id: str) -> None:
             f"allowlist. One leg must be {LIQUID_USDT_ID!r} (USDt-Liquid); "
             f"the other must be one of: {allowed}. Set "
             f"CHANGELLY_ALLOW_ALL_PAIRS=1 to bypass."
+        )
+
+
+# Per-network address format patterns. Used to catch wrong-network addresses
+# before Changelly accepts the order (which could result in lost funds).
+_ADDRESS_PATTERNS: dict[str, re.Pattern[str]] = {
+    "tron":     re.compile(r"^T[1-9A-HJ-NP-Za-km-z]{33}$"),
+    "ethereum": re.compile(r"^0x[0-9a-fA-F]{40}$"),
+    "bsc":      re.compile(r"^0x[0-9a-fA-F]{40}$"),
+    "polygon":  re.compile(r"^0x[0-9a-fA-F]{40}$"),
+    "solana":   re.compile(r"^[1-9A-HJ-NP-Za-km-z]{32,44}$"),
+    "ton":      re.compile(r"^[EU][Qq][0-9A-Za-z_\-]{46}$"),
+}
+
+
+def _validate_settle_address(network: str, address: str) -> None:
+    """Raise ValueError if `address` doesn't match the expected format for `network`.
+
+    Prevents sending to a wrong-network address — Changelly may accept it and
+    the funds would be unrecoverable.
+    """
+    if not address or not address.strip():
+        raise ValueError("settle_address cannot be empty")
+    pattern = _ADDRESS_PATTERNS.get(network.lower())
+    if pattern and not pattern.match(address):
+        raise ValueError(
+            f"settle_address {address!r} doesn't look like a valid {network} address. "
+            f"Double-check the address and network before sending."
         )
 
 
@@ -396,8 +428,11 @@ class ChangellyClient:
         if isinstance(resp, str):
             return resp
         if isinstance(resp, dict):
-            return resp.get("status") or resp.get("result") or "unknown"
-        return "unknown"
+            status = resp.get("status") or resp.get("result")
+            if not status:
+                raise RuntimeError(f"Changelly status response missing status/result field: {resp!r}")
+            return status
+        raise RuntimeError(f"Unexpected Changelly status response type {type(resp).__name__}: {resp!r}")
 
 
 # ---------------------------------------------------------------------------
@@ -433,10 +468,8 @@ def changelly_track_url(order_id: str) -> str:
 
 
 # Liquid USDt asset id (hex) — what `WalletManager.send` expects when sending
-# a non-L-BTC Liquid asset.
-LIQUID_USDT_HEX = (
-    "ce091c998b83c78bb71a632313ba3760f1763d9cfcffae02258ffa9865a37bd2"
-)
+# a non-L-BTC Liquid asset. Sourced from the canonical MAINNET_ASSETS registry.
+LIQUID_USDT_HEX = lookup_asset_by_ticker("USDt").asset_id  # type: ignore[union-attr]
 
 
 class ChangellyManager:
@@ -498,6 +531,7 @@ class ChangellyManager:
         settle_address: str,
         wallet_name: str = "default",
         password: Optional[str] = None,
+        rate_id: Optional[str] = None,
     ) -> "ChangellySwap":
         """Send USDt-Liquid out via a Changelly fixed-rate order.
 
@@ -507,14 +541,18 @@ class ChangellyManager:
             settle_address: external chain address to receive at.
             wallet_name: local Liquid wallet to sign with.
             password: mnemonic decryption password (if encrypted at rest).
+            rate_id: rate id from a prior changelly_quote call. If provided,
+                skips the internal quote fetch and uses this rate directly,
+                preventing rate drift between quote and execution.
 
         Returns a persisted `ChangellySwap` with the broadcast `deposit_hash`
         and Changelly's order id.
         """
         from_asset = LIQUID_USDT_ID
         to_asset = network_to_asset_id(external_network)
-        # Validate the agreed pair before any HTTP work.
+        # Validate the agreed pair and destination address before any HTTP work.
         _check_pair_allowed(from_asset, to_asset)
+        _validate_settle_address(external_network, settle_address)
 
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
@@ -530,15 +568,17 @@ class ChangellyManager:
         # Refund address: wallet's own Liquid address (USDt-Liquid is on Liquid).
         refund_address = self.wallet_manager.get_address(wallet_name).address
 
-        # Step 1 — fixed-rate quote
-        quote = self.client.get_fix_rate_for_amount(
-            from_asset=from_asset,
-            to_asset=to_asset,
-            amount_from=amount_from,
-        )
-        rate_id = quote.get("id") or quote.get("rateId")
-        if not rate_id:
-            raise RuntimeError(f"Unexpected Changelly quote response: {quote!r}")
+        # Step 1 — fixed-rate quote (skip if caller supplies a rate_id from a
+        # prior changelly_quote call to avoid rate drift between preview and send)
+        if rate_id is None:
+            quote = self.client.get_fix_rate_for_amount(
+                from_asset=from_asset,
+                to_asset=to_asset,
+                amount_from=amount_from,
+            )
+            rate_id = quote.get("id") or quote.get("rateId")
+            if not rate_id:
+                raise RuntimeError(f"Unexpected Changelly quote response: {quote!r}")
 
         # Step 2 — create fixed order
         order = self.client.create_fixed_transaction(
@@ -593,7 +633,7 @@ class ChangellyManager:
         external_network: str,
         wallet_name: str = "default",
         external_refund_address: Optional[str] = None,
-        amount_from: Optional[str] = None,
+        amount_from: str = "",
     ) -> "ChangellySwap":
         """Receive USDt-Liquid via a Changelly variable-rate order.
 
@@ -603,8 +643,8 @@ class ChangellyManager:
             external_refund_address: STRONGLY RECOMMENDED — sender's address
                 on the source chain. Without it, a stuck order requires
                 manual intervention via the Changelly web UI.
-            amount_from: optional reference amount. Variable orders accept any
-                amount; this is just for the quote preview.
+            amount_from: amount the external sender will deposit (decimal string,
+                e.g. "50"). Required by the Ankara backend serializer.
         """
         from_asset = network_to_asset_id(external_network)
         to_asset = LIQUID_USDT_ID
@@ -705,8 +745,6 @@ def _decimal_to_sats(decimal_str: str | float | int) -> int:
 
     USDt-Liquid uses 8 decimal places — same conversion as L-BTC sats.
     """
-    from decimal import Decimal, ROUND_HALF_UP
-
     d = Decimal(str(decimal_str))
     sats = (d * Decimal(100_000_000)).quantize(Decimal("1."), rounding=ROUND_HALF_UP)
     return int(sats)
