@@ -856,6 +856,7 @@ def sideshift_send(
     liquid_asset_id: str | None = None,
     settle_memo: str | None = None,
     refund_memo: str | None = None,
+    quote_id: str | None = None,
 ) -> dict[str, Any]:
     """Send funds from our wallet via a SideShift fixed-rate shift.
 
@@ -886,6 +887,11 @@ def sideshift_send(
         liquid_asset_id: required when deposit is a non-L-BTC Liquid asset
             (e.g. USDt-Liquid: pass the asset id hex)
         settle_memo / refund_memo: required for memo networks (TON, BNB, etc.)
+        quote_id: optional fixed-rate quote id from a prior `sideshift_quote`
+            call. Pass `preview["id"]` after the user confirms the preview to
+            ensure the shift executes at the rate the user just saw. Without
+            it, sideshift_send fetches a fresh quote — fine for non-interactive
+            flows, but the rate may have moved since any earlier preview.
 
     Returns:
         shift_id, deposit_hash (txid we broadcast), deposit_address,
@@ -904,6 +910,7 @@ def sideshift_send(
         liquid_asset_id=liquid_asset_id,
         settle_memo=settle_memo,
         refund_memo=refund_memo,
+        quote_id=quote_id,
     )
     return shift.to_dict()
 

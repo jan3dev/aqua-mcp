@@ -103,10 +103,12 @@ class TestStatusHelpers:
         assert shift_is_success(s) is False
         assert shift_is_failed(s) is False
 
-    def test_review_is_terminal_but_not_success(self):
-        assert shift_is_final("review") is True
+    def test_review_is_not_terminal(self):
+        # Per SideShift docs, "review" is a risk-management hold that can
+        # still resolve to settled or refunded — so it is NOT a final state.
+        assert shift_is_final("review") is False
         assert shift_is_success("review") is False
-        assert shift_is_failed("review") is False  # ambiguous; SideShift may eventually settle
+        assert shift_is_failed("review") is False
 
     def test_case_insensitive(self):
         assert shift_is_success("SETTLED") is True
@@ -762,6 +764,77 @@ class TestManagerSend:
                 wallet_name="default",
                 liquid_asset_id=USDT_LIQUID,
             )
+
+    @patch("aqua.sideshift.urllib.request.urlopen")
+    def test_send_with_quote_id_skips_internal_request_quote(self, mock_urlopen, manager_setup):
+        # When the caller threads through a confirmed quote_id, the manager
+        # must NOT call /quotes again — only /shifts/fixed and the broadcast.
+        mgr, wm, _, _ = manager_setup
+        mock_urlopen.side_effect = [
+            _mock_response({
+                "id": "shift_qid",
+                "depositAddress": "lq1qdeposit",
+                "depositAmount": "100",
+                "settleAmount": "99.5",
+                "rate": "0.995",
+                "status": "waiting",
+                "depositCoin": "USDT",
+                "depositNetwork": "liquid",
+                "settleCoin": "USDT",
+                "settleNetwork": "tron",
+                "settleAddress": "TXYZ",
+            }),
+        ]
+        shift = mgr.send_shift(
+            deposit_coin="usdt",
+            deposit_network="liquid",
+            settle_coin="usdt",
+            settle_network="tron",
+            settle_address="TXYZ",
+            deposit_amount="100",
+            wallet_name="default",
+            liquid_asset_id=USDT_LIQUID,
+            quote_id="confirmed_q_id",
+        )
+        assert shift.shift_id == "shift_qid"
+        assert shift.quote_id == "confirmed_q_id"
+        # Exactly one HTTP call: /shifts/fixed with the supplied quote id.
+        assert mock_urlopen.call_count == 1
+        req = mock_urlopen.call_args.args[0]
+        assert req.full_url.endswith("/shifts/fixed")
+        body = json.loads(req.data.decode())
+        assert body["quoteId"] == "confirmed_q_id"
+
+    @patch("aqua.sideshift.urllib.request.urlopen")
+    def test_send_without_quote_id_fetches_fresh_quote(self, mock_urlopen, manager_setup):
+        # The default path (no quote_id) still fetches a fresh quote.
+        mgr, _, _, _ = manager_setup
+        mock_urlopen.side_effect = [
+            _mock_response({"id": "fresh_q", "depositAmount": "100",
+                            "settleAmount": "99.5", "rate": "0.995"}),
+            _mock_response({
+                "id": "shift_fresh",
+                "depositAddress": "lq1qdeposit",
+                "depositAmount": "100",
+                "status": "waiting",
+                "depositCoin": "USDT",
+                "depositNetwork": "liquid",
+                "settleCoin": "USDT",
+                "settleNetwork": "tron",
+            }),
+        ]
+        shift = mgr.send_shift(
+            deposit_coin="usdt",
+            deposit_network="liquid",
+            settle_coin="usdt",
+            settle_network="tron",
+            settle_address="TXYZ",
+            deposit_amount="100",
+            wallet_name="default",
+            liquid_asset_id=USDT_LIQUID,
+        )
+        assert shift.quote_id == "fresh_q"
+        assert mock_urlopen.call_count == 2  # /quotes then /shifts/fixed
 
     @patch("aqua.sideshift.urllib.request.urlopen")
     def test_send_with_override_env_var_allows_lbtc(self, mock_urlopen, manager_setup, monkeypatch):

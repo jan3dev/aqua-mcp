@@ -167,6 +167,7 @@ def send(ctx, deposit_coin, deposit_network, settle_coin, settle_network,
     if (deposit_amount is None) == (settle_amount is None):
         raise click.UsageError("Provide exactly one of --deposit-amount or --settle-amount.")
 
+    quote_id: str | None = None
     if not skip_confirm:
         click.echo("Fetching quote from SideShift…", err=True)
         try:
@@ -184,6 +185,9 @@ def send(ctx, deposit_coin, deposit_network, settle_coin, settle_network,
             err=True,
         )
         click.confirm("Proceed with this swap?", abort=True, err=True)
+        # Reuse the confirmed quote so the shift executes at the rate the
+        # user just saw, not whatever a fresh quote returns moments later.
+        quote_id = preview.get("id")
 
     password = resolve_secret(
         "Password", password_stdin, env_var="AQUA_PASSWORD", required=False
@@ -205,6 +209,7 @@ def send(ctx, deposit_coin, deposit_network, settle_coin, settle_network,
                 "liquid_asset_id": liquid_asset_id,
                 "settle_memo": settle_memo,
                 "refund_memo": refund_memo,
+                "quote_id": quote_id,
             },
         ),
     )

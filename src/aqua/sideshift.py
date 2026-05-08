@@ -45,6 +45,8 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from typing import Any, Optional
 
+from .assets import LBTC_ASSET_ID
+
 logger = logging.getLogger(__name__)
 
 
@@ -408,14 +410,6 @@ class SideShiftClient:
     def get_shift(self, shift_id: str) -> dict:
         return self._api_request("GET", f"/shifts/{shift_id}") or {}
 
-    def set_refund_address(self, shift_id: str, address: str, memo: Optional[str] = None) -> dict:
-        body: dict[str, Any] = {"address": address}
-        if memo:
-            body["memo"] = memo
-        return self._api_request(
-            "POST", f"/shifts/{shift_id}/set-refund-address", body=body
-        ) or {}
-
 
 # ---------------------------------------------------------------------------
 # Coin/network resolution for the wallet's native chains
@@ -427,15 +421,6 @@ class SideShiftClient:
 NATIVE_DEPOSIT_CHAINS = {
     "bitcoin",  # BDK
     "liquid",   # LWK
-}
-
-# Liquid asset → SideShift (coin, network) mapping. The `coin` is what the
-# SideShift API expects; the `network` is always "liquid" here.
-LIQUID_ASSET_TO_SIDESHIFT_COIN = {
-    # L-BTC. SideShift quirks: L-BTC is "BTC" on the "liquid" network.
-    "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d": "btc",
-    # USDt on Liquid
-    "ce091c998b83c78bb71a632313ba3760f1763d9cfcffae02258ffa9865a37bd2": "usdt",
 }
 
 
@@ -507,7 +492,7 @@ def recommend_shift_or_swap(
 # SideShift returns one of these statuses (lowercase). We surface them as-is
 # but expose `is_final` and `is_success` helpers so callers don't have to
 # memorise the state machine.
-_FINAL_STATUSES = {"settled", "refunded", "expired", "review"}
+_FINAL_STATUSES = {"settled", "refunded", "expired"}
 _SUCCESS_STATUSES = {"settled"}
 _FAILED_STATUSES = {"refunded", "expired"}
 
@@ -617,6 +602,7 @@ class SideShiftManager:
         liquid_asset_id: Optional[str] = None,
         settle_memo: Optional[str] = None,
         refund_memo: Optional[str] = None,
+        quote_id: Optional[str] = None,
     ) -> "SideShiftShift":
         """Send funds from our wallet via a fixed-rate shift.
 
@@ -635,6 +621,12 @@ class SideShiftManager:
                 is not L-BTC (e.g. USDt-Liquid).
             settle_memo / refund_memo: required for memo networks
                 (TON, BNB Beacon, etc.) on either side.
+            quote_id: an existing fixed-rate quote id (from a prior
+                `quote()` call). When provided, skip the internal
+                `request_quote` call so the executed shift uses the same
+                rate the caller just confirmed with the user. Without it,
+                the manager fetches a fresh quote and the rate may differ
+                slightly from a preview shown moments earlier.
         """
         deposit_network_l = deposit_network.lower()
         if deposit_network_l not in NATIVE_DEPOSIT_CHAINS:
@@ -664,15 +656,22 @@ class SideShiftManager:
         # from (less the network fee on a refund tx).
         refund_address = self._wallet_address(deposit_network_l, wallet_name)
 
-        quote = self.client.request_quote(
-            deposit_coin, deposit_network, settle_coin, settle_network,
-            deposit_amount=deposit_amount, settle_amount=settle_amount,
-        )
-        if not quote.get("id"):
-            raise RuntimeError(f"Unexpected quote response: {quote!r}")
+        if quote_id:
+            # Reuse the caller-supplied quote so the shift executes at the
+            # rate the user just confirmed in the preview. Skips a redundant
+            # request_quote round-trip and removes the slippage window.
+            shift_quote_id = quote_id
+        else:
+            quote = self.client.request_quote(
+                deposit_coin, deposit_network, settle_coin, settle_network,
+                deposit_amount=deposit_amount, settle_amount=settle_amount,
+            )
+            if not quote.get("id"):
+                raise RuntimeError(f"Unexpected quote response: {quote!r}")
+            shift_quote_id = quote["id"]
 
         shift_resp = self.client.create_fixed_shift(
-            quote_id=quote["id"],
+            quote_id=shift_quote_id,
             settle_address=settle_address,
             refund_address=refund_address,
             settle_memo=settle_memo,
@@ -687,7 +686,7 @@ class SideShiftManager:
             direction="send",
             wallet_name=wallet_name,
             refund_address=refund_address,
-            quote_id=quote["id"],
+            quote_id=shift_quote_id,
         )
         # Persist BEFORE broadcasting the deposit. If the broadcast fails
         # we still have a record of the shift to refund or retry.
@@ -707,7 +706,7 @@ class SideShiftManager:
             )
         except Exception as e:
             shift.last_error = f"Deposit broadcast failed: {e}"
-            shift.status = shift.status or "failed"
+            shift.status = "failed"
             self.storage.save_sideshift_shift(shift)
             raise
         shift.deposit_hash = txid
@@ -842,7 +841,7 @@ class SideShiftManager:
                 wallet_name, address, amount_sats, password=password
             )
         if network == "liquid":
-            if liquid_asset_id and liquid_asset_id != _LIQUID_LBTC_POLICY_ASSET:
+            if liquid_asset_id and liquid_asset_id != LBTC_ASSET_ID:
                 return self.wallet_manager.send(
                     wallet_name, address, amount_sats,
                     asset_id=liquid_asset_id, password=password,
@@ -890,11 +889,6 @@ class SideShiftManager:
 # ---------------------------------------------------------------------------
 # Internal helpers
 # ---------------------------------------------------------------------------
-
-
-_LIQUID_LBTC_POLICY_ASSET = (
-    "6f0279e9ed041c3d710a9f57d0c02928416460c4b722ae3457a11eec381c526d"
-)
 
 
 def _decimal_to_sats(decimal_str: str | float | int) -> int:

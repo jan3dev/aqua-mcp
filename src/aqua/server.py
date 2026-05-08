@@ -532,6 +532,15 @@ TOOL_SCHEMAS = {
                 },
                 "settle_memo": {"type": "string", "description": "Required for memo networks (TON, BNB, etc.)"},
                 "refund_memo": {"type": "string"},
+                "quote_id": {
+                    "type": "string",
+                    "description": (
+                        "Optional fixed-rate quote id from a prior sideshift_quote "
+                        "call. Pass this after the user confirms the preview so the "
+                        "shift executes at the same rate they saw — without it, the "
+                        "tool fetches a fresh quote and the rate may have moved."
+                    ),
+                },
             },
             "required": [
                 "deposit_coin", "deposit_network", "settle_coin",
@@ -1208,8 +1217,10 @@ Please:
 9. If wallet is password-encrypted, ask me for the password
 10. For non-L-BTC Liquid assets (USDt-Liquid, etc.), look up the asset_id
     from lw_list_assets and pass liquid_asset_id when calling sideshift_send
-11. Call sideshift_send with the same parameters; this gets a fresh quote,
-    creates the shift, and broadcasts the deposit from my wallet
+11. Call sideshift_send with the same parameters AND pass quote_id from the
+    quote you just showed me so the shift executes at the rate I confirmed
+    (omit quote_id and a fresh quote is fetched, which may move). This
+    creates the shift and broadcasts the deposit from my wallet
 12. Show me shift_id + deposit_hash + the SideShift order URL
     (https://sideshift.ai/orders/<shift_id>)
 13. Tell me to use sideshift_status with the shift_id to track progress""",
