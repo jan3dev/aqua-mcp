@@ -720,6 +720,13 @@ class TestToolRegistry:
             "delete_wallet",
             "btc_import_descriptor",
             "btc_export_descriptor",
+            "sideshift_list_coins",
+            "sideshift_pair_info",
+            "sideshift_quote",
+            "sideshift_send",
+            "sideshift_receive",
+            "sideshift_status",
+            "sideshift_recommend",
         }
         assert set(TOOLS.keys()) == expected
 
