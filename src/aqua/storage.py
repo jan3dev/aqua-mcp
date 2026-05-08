@@ -83,6 +83,7 @@ class Storage:
         self.swaps_dir = self.base_dir / "swaps"
         self.ankara_swaps_dir = self.base_dir / "ankara_swaps"
         self.lightning_swaps_dir = self.base_dir / "lightning_swaps"
+        self.changelly_swaps_dir = self.base_dir / "changelly_swaps"
         self.config_path = self.base_dir / "config.json"
         self._ensure_dirs()
 
@@ -100,6 +101,8 @@ class Storage:
         os.chmod(self.ankara_swaps_dir, 0o700)
         self.lightning_swaps_dir.mkdir(exist_ok=True, mode=0o700)
         os.chmod(self.lightning_swaps_dir, 0o700)
+        self.changelly_swaps_dir.mkdir(exist_ok=True, mode=0o700)
+        os.chmod(self.changelly_swaps_dir, 0o700)
 
     def _derive_key(self, password: str, salt: bytes) -> bytes:
         """Derive encryption key from password."""
@@ -329,6 +332,40 @@ class Storage:
         return [
             p.stem
             for p in self.lightning_swaps_dir.glob("*.json")
+            if SWAP_ID_PATTERN.fullmatch(p.stem)
+        ]
+
+    # Changelly swap operations
+
+    def _changelly_swap_path(self, order_id: str) -> Path:
+        """Get path to Changelly swap file, validating the ID to prevent path traversal."""
+        if not SWAP_ID_PATTERN.fullmatch(order_id):
+            raise ValueError(
+                f"Invalid Changelly order ID '{order_id}'. "
+                "Use only letters, numbers, hyphens and underscores (max 128 chars)."
+            )
+        return self.changelly_swaps_dir / f"{order_id}.json"
+
+    def save_changelly_swap(self, swap) -> None:
+        """Save Changelly swap data for recovery."""
+        path = self._changelly_swap_path(swap.order_id)
+        self._atomic_write_json(path, swap.to_dict())
+
+    def load_changelly_swap(self, order_id: str):
+        """Load Changelly swap data. Returns ChangellySwap or None."""
+        from .changelly import ChangellySwap
+
+        path = self._changelly_swap_path(order_id)
+        if not path.exists():
+            return None
+        with open(path) as f:
+            return ChangellySwap.from_dict(json.load(f))
+
+    def list_changelly_swaps(self) -> list[str]:
+        """List all Changelly swap order IDs."""
+        return [
+            p.stem
+            for p in self.changelly_swaps_dir.glob("*.json")
             if SWAP_ID_PATTERN.fullmatch(p.stem)
         ]
 

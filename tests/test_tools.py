@@ -720,6 +720,11 @@ class TestToolRegistry:
             "delete_wallet",
             "btc_import_descriptor",
             "btc_export_descriptor",
+            "changelly_list_currencies",
+            "changelly_quote",
+            "changelly_send",
+            "changelly_receive",
+            "changelly_status",
         }
         assert set(TOOLS.keys()) == expected
 
