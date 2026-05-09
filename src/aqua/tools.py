@@ -796,9 +796,9 @@ def pix_receive(
     manager = get_pix_manager()
     swap = manager.create_deposit(amount_cents, wallet_name, password)
 
-    from .pix import _format_brl
+    from .pix import format_brl
 
-    amount_brl = _format_brl(swap.amount_cents)
+    amount_brl = format_brl(swap.amount_cents)
     all_wallets = get_manager().storage.list_wallets()
     wallet_note = f" in wallet '{wallet_name}'" if len(all_wallets) > 1 else ""
     return {

@@ -14,7 +14,7 @@ from aqua.pix import (
     EulenClient,
     PixManager,
     PixSwap,
-    _format_brl,
+    format_brl,
 )
 from aqua.storage import Storage
 from aqua.wallet import WalletManager
@@ -149,7 +149,7 @@ class TestFormatBRL:
         ],
     )
     def test_format_brl(self, cents, expected):
-        assert _format_brl(cents) == expected
+        assert format_brl(cents) == expected
 
 
 # ---------------------------------------------------------------------------

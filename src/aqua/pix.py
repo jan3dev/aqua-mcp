@@ -13,7 +13,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import uuid
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields
 from datetime import UTC, datetime
 from typing import Optional
 
@@ -61,10 +61,11 @@ class PixSwap:
 
     @classmethod
     def from_dict(cls, data: dict) -> "PixSwap":
-        data = {**data}
+        known = {f.name for f in fields(cls)}
+        filtered = {k: v for k, v in data.items() if k in known}
         for field_name in ("qr_image_url", "expiration", "blockchain_txid", "payer_name"):
-            data.setdefault(field_name, None)
-        return cls(**data)
+            filtered.setdefault(field_name, None)
+        return cls(**filtered)
 
 
 class EulenClient:
@@ -139,7 +140,7 @@ class EulenClient:
         return self._api_request("GET", "/deposit-status", query={"id": deposit_id})
 
 
-def _format_brl(amount_cents: int) -> str:
+def format_brl(amount_cents: int) -> str:
     """Render cents as 'R$1.234,56' (Brazilian convention)."""
     integer, fraction = divmod(amount_cents, 100)
     integer_str = f"{integer:,}".replace(",", ".")
@@ -191,6 +192,10 @@ class PixManager:
                 f"({PIX_MIN_AMOUNT_CENTS} cents = R$1.00)"
             )
 
+        # Fail fast on missing token before any wallet I/O — otherwise
+        # get_address() may advance the LWK address index for nothing.
+        client = EulenClient()
+
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
             raise ValueError(f"Wallet '{wallet_name}' not found")
@@ -198,11 +203,7 @@ class PixManager:
         addr = self.wallet_manager.get_address(wallet_name)
         depix_address = addr.address
 
-        client = EulenClient()
-        try:
-            resp = client.create_deposit(amount_cents, depix_address)
-        except Exception as e:
-            raise RuntimeError(f"Failed to create Pix deposit: {e}") from e
+        resp = client.create_deposit(amount_cents, depix_address)
 
         deposit_id = resp.get("id") or resp.get("depositId")
         qr_copy_paste = resp.get("qrCopyPaste")
@@ -225,36 +226,47 @@ class PixManager:
         return swap
 
     def get_deposit_status(self, swap_id: str) -> dict:
-        """Poll Eulen for the deposit status and persist any changes."""
+        """Poll Eulen for the deposit status and persist any changes.
+
+        Skips the network call when the cached status is already terminal —
+        Eulen will not change a settled / canceled / refunded record.
+        """
         swap = self.storage.load_pix_swap(swap_id)
         if not swap:
             raise ValueError(f"Pix swap not found: {swap_id}")
 
         warning = None
-        try:
-            client = EulenClient()
-            resp = client.get_deposit_status(swap_id)
-            new_status = resp.get("status")
-            if new_status and new_status != swap.status:
-                swap.status = new_status
-            txid = resp.get("blockchainTxID") or resp.get("blockchainTxId")
-            if txid:
-                swap.blockchain_txid = txid
-            payer = resp.get("payerName")
-            if payer:
-                swap.payer_name = payer
-            expiration = resp.get("expiration")
-            if expiration:
-                swap.expiration = expiration
-            self.storage.save_pix_swap(swap)
-        except Exception as e:
-            warning = f"Could not fetch remote status: {e}"
+        if swap.status not in TERMINAL_STATUSES:
+            try:
+                client = EulenClient()
+                resp = client.get_deposit_status(swap_id)
+                new_status = resp.get("status")
+                if new_status and new_status != swap.status:
+                    if new_status in EULEN_STATUS_VALUES:
+                        swap.status = new_status
+                    else:
+                        warning = (
+                            f"Eulen returned unknown status '{new_status}'; "
+                            f"keeping cached '{swap.status}'."
+                        )
+                txid = resp.get("blockchainTxID") or resp.get("blockchainTxId")
+                if txid:
+                    swap.blockchain_txid = txid
+                payer = resp.get("payerName")
+                if payer:
+                    swap.payer_name = payer
+                expiration = resp.get("expiration")
+                if expiration:
+                    swap.expiration = expiration
+                self.storage.save_pix_swap(swap)
+            except Exception as e:
+                warning = f"Could not fetch remote status: {e}"
 
         result = {
             "swap_id": swap.swap_id,
             "status": swap.status,
             "amount_cents": swap.amount_cents,
-            "amount_brl": _format_brl(swap.amount_cents),
+            "amount_brl": format_brl(swap.amount_cents),
             "wallet_name": swap.wallet_name,
             "depix_address": swap.depix_address,
             "network": swap.network,
