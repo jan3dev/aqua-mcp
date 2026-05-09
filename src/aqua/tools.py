@@ -709,21 +709,26 @@ def lightning_send(
     invoice: str,
     wallet_name: str = "default",
     password: str | None = None,
+    amount_sats: int | None = None,
 ) -> dict[str, Any]:
-    """Pay a Lightning invoice using L-BTC from a Liquid wallet.
+    """Pay a Lightning invoice or Lightning Address using L-BTC from a Liquid wallet.
 
     Uses a submarine swap via Boltz. Fees: ~0.1% + miner fees.
 
     Args:
-        invoice: BOLT11 Lightning invoice (lnbc... or lntb...)
+        invoice: BOLT11 Lightning invoice (lnbc.../lntb...) OR Lightning Address
+            (user@domain.com). For LN addresses, the server resolves to a BOLT11
+            via LUD-16 (https://{domain}/.well-known/lnurlp/{user}).
         wallet_name: Liquid wallet to pay from. Default: "default"
         password: Password to decrypt mnemonic (if encrypted at rest)
+        amount_sats: Amount in sats. Required when `invoice` is a Lightning Address.
+            Optional for BOLT11 (must match the encoded amount if supplied).
 
     Returns:
         swap_id, lockup_txid, status, amount
     """
     manager = get_lightning_manager()
-    swap = manager.pay_invoice(invoice, wallet_name, password)
+    swap = manager.pay_invoice(invoice, wallet_name, password, amount_sats)
 
     return {
         "swap_id": swap.swap_id,

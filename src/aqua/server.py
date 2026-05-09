@@ -419,13 +419,13 @@ TOOL_SCHEMAS = {
         },
     },
     "lightning_send": {
-        "description": "Pay a Lightning invoice using L-BTC from a Liquid wallet (reverse submarine swap). Fees: ~0.1% + miner fees. Limits: 100 – 25,000,000 Sats.",
+        "description": "Pay a Lightning invoice or Lightning Address using L-BTC from a Liquid wallet (reverse submarine swap). Fees: ~0.1% + miner fees. Limits: 100 – 25,000,000 Sats.",
         "inputSchema": {
             "type": "object",
             "properties": {
                 "invoice": {
                     "type": "string",
-                    "description": "BOLT11 Lightning invoice (lnbc... or lntb...)",
+                    "description": "BOLT11 Lightning invoice (lnbc.../lntb...) OR Lightning Address (user@domain.com)",
                 },
                 "wallet_name": {
                     "type": "string",
@@ -435,6 +435,10 @@ TOOL_SCHEMAS = {
                 "password": {
                     "type": "string",
                     "description": "Password to decrypt mnemonic (if encrypted at rest)",
+                },
+                "amount_sats": {
+                    "type": "integer",
+                    "description": "Amount in sats. Required when invoice is a Lightning Address; optional for BOLT11 (must match if supplied).",
                 },
             },
             "required": ["invoice"],
@@ -516,7 +520,8 @@ PASSWORD HANDLING (encryption at rest):
 LIGHTNING:
 - Use lightning_receive to generate an invoice for receiving L-BTC from Lightning
   Fees: ~0.1%, Limits: 100 - 25,000,000 Sats, Time: ~1-2 min after payment
-- Use lightning_send to pay a BOLT11 invoice using L-BTC (submarine swap via Boltz)
+- Use lightning_send to pay a BOLT11 invoice OR a Lightning Address (user@domain.com)
+  using L-BTC (submarine swap via Boltz). Lightning Addresses require amount_sats.
   Fees: ~0.1% + miner fees, Limits: 100 - 25,000,000 Sats
 - Use lightning_transaction_status to check status of any Lightning swap (send or receive)
 
@@ -964,23 +969,27 @@ Please follow this safety workflow:
                         role="user",
                         content=TextContent(
                             type="text",
-                            text=f"""I want to pay a Lightning invoice using my Liquid wallet '{wallet_name}'.
+                            text=f"""I want to pay a Lightning invoice or Lightning Address using my Liquid wallet '{wallet_name}'.
 
 Please:
 1. Show my L-BTC balance first (lw_balance)
-2. Ask me for the Lightning invoice (BOLT11 format, starts with lnbc...)
-3. Explain the fee structure:
+2. Ask me for either:
+   - A BOLT11 Lightning invoice (starts with lnbc.../lntb...), OR
+   - A Lightning Address (user@domain.com). If a Lightning Address, also ask for
+     the amount in sats — Lightning Addresses don't encode the amount.
+3. If a Lightning Address, confirm the resolved amount and metadata before sending.
+4. Explain the fee structure:
    - Boltz fee: ~0.1% of amount
    - Miner fee: ~19 Sats
-   - Limits: 1,000 - 25,000,000 Sats
-4. Show total cost (invoice amount + fees) and ask for confirmation
-5. Use lightning_send to execute the swap
-6. Wait for completion (may take 1-3 minutes)
-7. Show the result:
+   - Limits: 100 - 25,000,000 Sats
+5. Show total cost (invoice amount + fees) and ask for confirmation
+6. Use lightning_send to execute the swap (pass amount_sats for Lightning Addresses)
+7. Wait for completion (may take 1-3 minutes)
+8. Show the result:
    - Swap ID for reference
    - Preimage (proof of payment)
    - Explorer link for lockup transaction
-8. If swap fails, explain that L-BTC is locked until timeout and can be refunded""",
+9. If swap fails, explain that L-BTC is locked until timeout and can be refunded""",
                         ),
                     )
                 ]

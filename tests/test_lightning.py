@@ -447,6 +447,109 @@ class TestLightningManagerSend:
         assert send_called
 
 
+class TestLightningManagerSendLNAddress:
+    """Tests for Lightning Address routing in LightningManager.pay_invoice()."""
+
+    def test_lightning_address_routes_through_resolver(self, test_wallet):
+        """LN address input invokes resolve_lightning_address with (address, amount)."""
+        manager = get_lightning_manager()
+
+        with patch("aqua.lightning.resolve_lightning_address") as mock_resolve, patch(
+            "aqua.lightning.decode_bolt11_amount_sats", return_value=50_000
+        ), patch.object(
+            type(get_manager()),
+            "get_balance",
+            return_value=[
+                Balance(
+                    asset_id="policy_asset",
+                    asset_name="L-BTC",
+                    ticker="L-BTC",
+                    amount=200_000,
+                )
+            ],
+        ), patch("aqua.lightning.BoltzClient") as mock_boltz, patch(
+            "aqua.lightning.generate_keypair", return_value=("privkey", "pubkey")
+        ), patch("aqua.wallet.WalletManager.send", return_value="lockup_txid"):
+            mock_resolve.return_value = VALID_INVOICE_MAINNET
+            mock_client = MagicMock()
+            mock_boltz.return_value = mock_client
+            mock_client.get_submarine_pairs.return_value = MOCK_BOLTZ_SUBMARINE_PAIRS
+            mock_client.create_submarine_swap.return_value = MOCK_BOLTZ_SWAP_RESPONSE
+
+            swap = manager.pay_invoice(
+                "alice@getalby.com", "default", amount_sats=50_000
+            )
+
+            mock_resolve.assert_called_once_with("alice@getalby.com", 50_000)
+            assert swap.invoice == VALID_INVOICE_MAINNET
+
+    def test_lightning_address_requires_amount_sats(self, test_wallet):
+        """LN address without amount_sats raises ValueError."""
+        manager = get_lightning_manager()
+        with patch("aqua.lightning.resolve_lightning_address") as mock_resolve:
+            with pytest.raises(ValueError, match="amount_sats is required"):
+                manager.pay_invoice("alice@getalby.com", "default")
+            mock_resolve.assert_not_called()
+
+    def test_lightning_address_amount_outside_boltz_limits_raises_early(self, test_wallet):
+        """amount_sats below Boltz min raises before any HTTP call."""
+        manager = get_lightning_manager()
+        with patch("aqua.lightning.resolve_lightning_address") as mock_resolve:
+            with pytest.raises(ValueError, match="outside Boltz limits"):
+                manager.pay_invoice("alice@getalby.com", "default", amount_sats=50)
+            mock_resolve.assert_not_called()
+
+    def test_lightning_address_amount_above_boltz_max_raises_early(self, test_wallet):
+        """amount_sats above Boltz max raises before any HTTP call."""
+        manager = get_lightning_manager()
+        with patch("aqua.lightning.resolve_lightning_address") as mock_resolve:
+            with pytest.raises(ValueError, match="outside Boltz limits"):
+                manager.pay_invoice(
+                    "alice@getalby.com", "default", amount_sats=30_000_000
+                )
+            mock_resolve.assert_not_called()
+
+    def test_bolt11_with_matching_amount_sats_passes(self, test_wallet):
+        """BOLT11 with matching amount_sats works exactly like no amount_sats."""
+        manager = get_lightning_manager()
+        with patch.object(
+            type(get_manager()),
+            "get_balance",
+            return_value=[
+                Balance(
+                    asset_id="policy_asset",
+                    asset_name="L-BTC",
+                    ticker="L-BTC",
+                    amount=200_000,
+                )
+            ],
+        ), patch(
+            "aqua.lightning.decode_bolt11_amount_sats", return_value=50_000
+        ), patch("aqua.lightning.BoltzClient") as mock_boltz, patch(
+            "aqua.lightning.generate_keypair", return_value=("privkey", "pubkey")
+        ), patch("aqua.wallet.WalletManager.send", return_value="lockup_txid"):
+            mock_client = MagicMock()
+            mock_boltz.return_value = mock_client
+            mock_client.get_submarine_pairs.return_value = MOCK_BOLTZ_SUBMARINE_PAIRS
+            mock_client.create_submarine_swap.return_value = MOCK_BOLTZ_SWAP_RESPONSE
+
+            swap = manager.pay_invoice(
+                VALID_INVOICE_MAINNET, "default", amount_sats=50_000
+            )
+            assert swap.swap_id == "boltz_swap_123"
+
+    def test_bolt11_with_mismatching_amount_sats_raises(self, test_wallet):
+        """BOLT11 + amount_sats that disagree → ValueError."""
+        manager = get_lightning_manager()
+        with patch(
+            "aqua.lightning.decode_bolt11_amount_sats", return_value=50_000
+        ):
+            with pytest.raises(ValueError, match="does not match BOLT11 invoice"):
+                manager.pay_invoice(
+                    VALID_INVOICE_MAINNET, "default", amount_sats=99_999
+                )
+
+
 class TestLightningManagerReceiveStatus:
     """Tests for LightningManager.get_receive_status()."""
 
@@ -922,6 +1025,34 @@ class TestLightningTools:
             assert result["swap_id"] == "boltz_123"
             assert result["lockup_txid"] == "abc123"
             assert result["status"] == "processing"
+
+    def test_lightning_send_tool_passes_amount_sats(self, test_wallet):
+        """lightning_send forwards amount_sats to manager.pay_invoice."""
+        with patch("aqua.tools.get_lightning_manager") as mock_get:
+            mock_manager = MagicMock()
+            mock_get.return_value = mock_manager
+            mock_manager.pay_invoice.return_value = LightningSwap(
+                swap_id="boltz_123",
+                swap_type="send",
+                provider="boltz",
+                invoice=VALID_INVOICE_MAINNET,
+                amount=50_000,
+                wallet_name="default",
+                status="processing",
+                network="mainnet",
+                created_at=datetime.now(UTC).isoformat(),
+                lockup_txid="abc123",
+            )
+
+            lightning_send(
+                "alice@getalby.com",
+                "default",
+                amount_sats=50_000,
+            )
+
+            mock_manager.pay_invoice.assert_called_once_with(
+                "alice@getalby.com", "default", None, 50_000
+            )
 
     def test_lightning_transaction_status_tool(self):
         """lightning_transaction_status tool delegates to manager.get_swap_status."""
