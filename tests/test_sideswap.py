@@ -866,6 +866,42 @@ class TestParseQuoteStatus:
         with pytest.raises(SideSwapWSError, match="Unknown QuoteStatus"):
             parse_quote_status({"status": {"Surprise": {}}})
 
+    def test_success_missing_quote_id_raises_ws_error_not_keyerror(self):
+        # Without validation, the int() in execute_swap would KeyError —
+        # which surfaces as a generic exception far from the cause.
+        with pytest.raises(SideSwapWSError, match="missing 'quote_id'"):
+            parse_quote_status(
+                {
+                    "status": {
+                        "Success": {
+                            "base_amount": 1,
+                            "quote_amount": 2,
+                            "server_fee": 0,
+                            "fixed_fee": 0,
+                            "ttl": 30000,
+                        }
+                    }
+                }
+            )
+
+    def test_success_non_integer_amount_raises_ws_error(self):
+        with pytest.raises(SideSwapWSError, match="not an integer"):
+            parse_quote_status(
+                {
+                    "status": {
+                        "Success": {
+                            "quote_id": 1,
+                            "base_amount": "not-a-number",
+                            "quote_amount": 2,
+                        }
+                    }
+                }
+            )
+
+    def test_success_non_dict_payload_raises(self):
+        with pytest.raises(SideSwapWSError, match="Malformed Success"):
+            parse_quote_status({"status": {"Success": "stringified"}})
+
 
 # ---------------------------------------------------------------------------
 # PSET verifier — security-critical, tested with adversarial inputs

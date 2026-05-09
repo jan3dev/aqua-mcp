@@ -659,7 +659,26 @@ def parse_quote_status(quote_notif: dict) -> dict:
     if not isinstance(status, dict) or not status:
         raise SideSwapWSError(f"Malformed quote status: {status!r}")
     if "Success" in status:
-        return status["Success"]
+        success = status["Success"]
+        if not isinstance(success, dict):
+            raise SideSwapWSError(f"Malformed Success quote: {success!r}")
+        # Validate the fields the caller will read so a malformed payload
+        # raises SideSwapWSError here, not a KeyError/TypeError far away in
+        # execute_swap when it indexes into the dict.
+        for key in ("quote_id", "base_amount", "quote_amount"):
+            value = success.get(key)
+            if value is None:
+                raise SideSwapWSError(
+                    f"Malformed Success quote: missing {key!r} ({success!r})"
+                )
+            try:
+                int(value)
+            except (TypeError, ValueError) as e:
+                raise SideSwapWSError(
+                    f"Malformed Success quote: {key} is not an integer "
+                    f"({value!r})"
+                ) from e
+        return success
     if "LowBalance" in status:
         lb = status["LowBalance"]
         raise SideSwapWSError(
@@ -1323,8 +1342,13 @@ class SideSwapSwapManager:
         recv_addr = str(wollet.address(None).address())
         change_addr = str(wollet.address(None).address())
 
-        async def _quote_to_pset() -> tuple[dict, dict, dict]:
-            """Open WS, run the mkt::* dance, return (market, quote, get_quote_resp)."""
+        # SideSwap binds quote_id to the WebSocket session that issued
+        # start_quotes / get_quote — submitting taker_sign on a fresh
+        # connection is rejected with `protocol error: wrong client_id`.
+        # The verify + sign steps in the middle are sync but cheap, so we
+        # hold one async with for the entire quote → sign → submit flow.
+        async def _full_swap() -> "SideSwapSwap":
+            nonlocal send_amount  # may be widened below by flexible_small_amount
             async with SideSwapWSClient(network) as client:
                 await client.login_client()
                 # Find a market that covers our pair
@@ -1344,135 +1368,124 @@ class SideSwapSwapManager:
                     instant_swap=True,
                 )
                 # Wait for the first usable quote — a `quote` notification with
-                # a Success status. parse_quote_status raises on LowBalance/Error.
+                # a Success status. parse_quote_status raises on LowBalance/Error
+                # AND validates that quote_id / base_amount / quote_amount are
+                # present and integral, so the int() casts below cannot KeyError.
                 quote_notif = await client.next_market_notification(
                     "quote", timeout=quote_wait_seconds
                 )
-                quote = parse_quote_status(quote_notif)
-                # Accept the quote and request the half-built PSET
-                get_quote_resp = await client.mkt_get_quote(int(quote["quote_id"]))
-                # Best-effort cleanup
+                quote_data = parse_quote_status(quote_notif)
+                # Accept the quote and request the half-built PSET on the same
+                # session so the server recognises us as the original taker.
+                get_quote_resp = await client.mkt_get_quote(int(quote_data["quote_id"]))
                 try:
                     await client.mkt_stop_quotes()
                 except Exception:
                     pass
-                return market, quote, get_quote_resp
 
-        market, quote_data, get_quote_resp = _run(_quote_to_pset())
+                # ---- Phase 2: validate + persist (sync, runs on the loop) ---
+                quote_id = int(quote_data["quote_id"])
+                order_id = f"mkt_{quote_id}"
+                # Re-derive recv/send amounts from the quote, not the user's
+                # request: the dealer's quote_amount/base_amount are canonical.
+                if send_asset == market["asset_pair"].get("base"):
+                    send_amount_q = int(quote_data["base_amount"])
+                    recv_amount_q = int(quote_data["quote_amount"])
+                else:
+                    send_amount_q = int(quote_data["quote_amount"])
+                    recv_amount_q = int(quote_data["base_amount"])
+                if send_amount_q != send_amount:
+                    delta = abs(send_amount_q - send_amount)
+                    if flexible_small_amount and delta <= self.SMALL_AMOUNT_TOLERANCE_SATS:
+                        # Dealer rounded the send amount slightly; caller has
+                        # opted in to accepting the adjustment. The PSET
+                        # verifier still checks the wallet's actual balance
+                        # change against send_amount_q below.
+                        send_amount = send_amount_q
+                    else:
+                        raise SideSwapWSError(
+                            f"Quote send_amount mismatch: requested {send_amount}, "
+                            f"dealer offered {send_amount_q} (delta={delta} sats). "
+                            "Pass flexible_small_amount=True to accept dealer "
+                            f"adjustments up to ±{self.SMALL_AMOUNT_TOLERANCE_SATS} sats."
+                        )
+                recv_amount = recv_amount_q
 
-        # Decide a stable order_id we control for persistence. SideSwap mkt::*
-        # gives us a `quote_id` (numeric) per quote; the `order_id` field is
-        # only used for marker resting orders. We persist the quote_id as a
-        # string in our `order_id` slot so the rest of the manager (status
-        # lookup, storage path) keeps the same shape.
-        quote_id = int(quote_data["quote_id"])
-        order_id = f"mkt_{quote_id}"
-        recv_amount = int(quote_data["quote_amount"]) if asset_id == market["asset_pair"]["base"] else int(quote_data["base_amount"])
-        # Re-derive recv/send amounts from the quote, not the user's request:
-        # the dealer's quote_amount/base_amount are the canonical numbers.
-        if send_asset == market["asset_pair"].get("base"):
-            send_amount_q = int(quote_data["base_amount"])
-            recv_amount_q = int(quote_data["quote_amount"])
-        else:
-            send_amount_q = int(quote_data["quote_amount"])
-            recv_amount_q = int(quote_data["base_amount"])
-        if send_amount_q != send_amount:
-            delta = abs(send_amount_q - send_amount)
-            if flexible_small_amount and delta <= self.SMALL_AMOUNT_TOLERANCE_SATS:
-                # Dealer rounded the send amount slightly; caller has opted
-                # in to accepting the adjustment. The PSET verifier still
-                # checks the wallet's actual balance change against
-                # send_amount_q below, so the user is never debited more
-                # than the dealer's quote.
-                send_amount = send_amount_q
-            else:
-                raise SideSwapWSError(
-                    f"Quote send_amount mismatch: requested {send_amount}, "
-                    f"dealer offered {send_amount_q} (delta={delta} sats). "
-                    "Pass flexible_small_amount=True to accept dealer "
-                    f"adjustments up to ±{self.SMALL_AMOUNT_TOLERANCE_SATS} sats."
+                pset_b64 = get_quote_resp.get("pset")
+                if not pset_b64:
+                    raise SideSwapWSError(
+                        f"Unexpected get_quote response: {get_quote_resp!r}"
+                    )
+
+                # SideSwap quote doesn't return a single 'price' field on
+                # mkt::*; derive it from recv/send for reference only.
+                price = recv_amount / send_amount if send_amount else 0.0
+
+                swap = SideSwapSwap(
+                    order_id=order_id,
+                    submit_id=str(quote_id),
+                    send_asset=send_asset,
+                    send_amount=send_amount,
+                    recv_asset=recv_asset,
+                    recv_amount=recv_amount,
+                    price=price,
+                    wallet_name=wallet_name,
+                    network=network,
+                    status="pending",
+                    created_at=datetime.now(UTC).isoformat(),
                 )
-        recv_amount = recv_amount_q
+                self.storage.save_sideswap_swap(swap)
 
-        pset_b64 = get_quote_resp.get("pset")
-        if not pset_b64:
-            raise SideSwapWSError(f"Unexpected get_quote response: {get_quote_resp!r}")
+                try:
+                    # ---- Phase 3: verify + sign (sync) ----------------------
+                    # fee_asset is pinned to the policy asset so the fee
+                    # tolerance only relaxes the L-BTC side — never the asset.
+                    self._verify_pset(
+                        pset_b64,
+                        wollet,
+                        send_asset=send_asset,
+                        send_amount=send_amount,
+                        recv_asset=recv_asset,
+                        recv_amount=recv_amount,
+                        fee_tolerance_sats=fee_tolerance_sats,
+                        fee_asset=policy_asset,
+                    )
+                    swap.status = "verified"
+                    self.storage.save_sideswap_swap(swap)
 
-        # Persist the in-progress swap before signing.
-        # `submit_id` is reused to hold the quote_id so existing storage stays
-        # backward-compatible with the legacy flow.
-        # SideSwap quote doesn't return a single 'price' field on mkt::*; derive
-        # it from amounts. price = quote_amount / base_amount — but client may
-        # interpret either side, so we just store recv/send ratio for reference.
-        price = recv_amount / send_amount if send_amount else 0.0
+                    signer = self.wallet_manager._signers[wallet_name]
+                    import lwk
 
-        swap = SideSwapSwap(
-            order_id=order_id,
-            submit_id=str(quote_id),
-            send_asset=send_asset,
-            send_amount=send_amount,
-            recv_asset=recv_asset,
-            recv_amount=recv_amount,
-            price=price,
-            wallet_name=wallet_name,
-            network=network,
-            status="pending",
-            created_at=datetime.now(UTC).isoformat(),
-        )
-        self.storage.save_sideswap_swap(swap)
+                    pset = lwk.Pset(pset_b64)
+                    signed = signer.sign(pset)
+                    signed_b64 = str(signed)
+                    swap.status = "signed"
+                    self.storage.save_sideswap_swap(swap)
 
-        try:
-            # Verify before signing — security-critical. fee_asset is pinned
-            # to the policy asset; on the reverse direction this prevents a
-            # 1000-sat siphon of the asset via the fee tolerance loophole.
-            self._verify_pset(
-                pset_b64,
-                wollet,
-                send_asset=send_asset,
-                send_amount=send_amount,
-                recv_asset=recv_asset,
-                recv_amount=recv_amount,
-                fee_tolerance_sats=fee_tolerance_sats,
-                fee_asset=policy_asset,
-            )
-            swap.status = "verified"
-            self.storage.save_sideswap_swap(swap)
+                    # ---- Phase 4: submit on the SAME WS --------------------
+                    sign_payload = await client.mkt_taker_sign(quote_id, signed_b64)
+                    txid = sign_payload.get("txid")
+                    if not txid:
+                        raise SideSwapWSError(
+                            f"Unexpected taker_sign response: {sign_payload!r}"
+                        )
+                    swap.txid = txid
+                    swap.status = "broadcast"
+                    self.storage.save_sideswap_swap(swap)
+                    return swap
 
-            # Sign locally
-            signer = self.wallet_manager._signers[wallet_name]
-            import lwk
+                except PsetVerificationError as e:
+                    swap.status = "failed"
+                    swap.last_error = f"PSET verification failed: {e}"
+                    self.storage.save_sideswap_swap(swap)
+                    raise
+                except Exception as e:
+                    swap.status = "failed"
+                    swap.last_error = str(e)
+                    self.storage.save_sideswap_swap(swap)
+                    raise
 
-            pset = lwk.Pset(pset_b64)
-            signed = signer.sign(pset)
-            signed_b64 = str(signed)
-            swap.status = "signed"
-            self.storage.save_sideswap_swap(swap)
-
-            # Submit signed PSET via mkt::taker_sign; server merges & broadcasts
-            async def _submit() -> dict:
-                async with SideSwapWSClient(network) as client:
-                    await client.login_client()
-                    return await client.mkt_taker_sign(quote_id, signed_b64)
-
-            sign_payload = _run(_submit())
-            txid = sign_payload.get("txid")
-            if not txid:
-                raise SideSwapWSError(f"Unexpected taker_sign response: {sign_payload!r}")
-            swap.txid = txid
-            swap.status = "broadcast"
-            self.storage.save_sideswap_swap(swap)
-            return swap
-
-        except PsetVerificationError as e:
-            swap.status = "failed"
-            swap.last_error = f"PSET verification failed: {e}"
-            self.storage.save_sideswap_swap(swap)
-            raise
-        except Exception as e:
-            swap.status = "failed"
-            swap.last_error = str(e)
-            self.storage.save_sideswap_swap(swap)
-            raise
+        return _run(_full_swap())
 
     def _verify_pset(
         self,
