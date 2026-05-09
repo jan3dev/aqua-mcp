@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
+import logging
+
 import click
+
+logger = logging.getLogger(__name__)
 
 from ..tools import (
     changelly_list_currencies,
@@ -100,6 +104,7 @@ def send(ctx, external_network, settle_address, amount_from, wallet_name,
     from the local wallet. A refund address is set automatically (the
     wallet's own Liquid address).
     """
+    rate_id = None
     if not skip_confirm:
         click.echo("Fetching Changelly quote…", err=True)
         try:
@@ -110,6 +115,7 @@ def send(ctx, external_network, settle_address, amount_from, wallet_name,
             )
         except Exception as e:
             raise click.UsageError(f"Could not fetch quote: {e}") from e
+        rate_id = preview.get("id")
         click.echo(
             f"Send: {preview.get('amountFrom')} USDt-Liquid\n"
             f"Recv: {preview.get('amountTo')} USDt on {external_network} "
@@ -133,6 +139,7 @@ def send(ctx, external_network, settle_address, amount_from, wallet_name,
                 "amount_from": amount_from,
                 "wallet_name": wallet_name,
                 "password": password,
+                "rate_id": rate_id,
             },
         ),
     )
@@ -149,8 +156,8 @@ def send(ctx, external_network, settle_address, amount_from, wallet_name,
     help="Source-chain refund address (STRONGLY RECOMMENDED).",
 )
 @click.option(
-    "--amount-from", default=None,
-    help="Optional reference amount for the quote preview.",
+    "--amount-from", required=True,
+    help="Amount the external sender will deposit (decimal string, e.g. '50').",
 )
 @click.pass_obj
 def receive(ctx, external_network, wallet_name, external_refund_address, amount_from):
@@ -161,6 +168,12 @@ def receive(ctx, external_network, wallet_name, external_refund_address, amount_
     `--external-refund-address`, a stuck order requires manual intervention
     via Changelly's web UI.
     """
+    if external_refund_address is None or not str(external_refund_address).strip():
+        logger.warning(
+            "Changelly receive: no --external-refund-address. Omitting it may leave "
+            "orders stuck and require manual intervention via Changelly's web UI; "
+            "use --external-refund-address with a source-chain refund address when possible."
+        )
     run_tool(
         ctx,
         lambda: changelly_receive(

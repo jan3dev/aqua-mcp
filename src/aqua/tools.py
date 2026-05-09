@@ -5,6 +5,7 @@ import logging
 import re
 import urllib.error
 import urllib.request
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 from .assets import MAINNET_ASSETS, TESTNET_ASSETS, resolve_asset_name
@@ -330,6 +331,21 @@ def _parse_tx_input(tx_input: str) -> tuple[str, str]:
     raise ValueError(
         f"Invalid input: expected a 64-char hex txid or a Blockstream URL, got: {tx_input}"
     )
+
+
+def _validate_positive_decimal_string(value: str, field_name: str) -> None:
+    """Ensure value strips to a valid Decimal > 0 (for Changelly decimal amounts)."""
+    stripped = value.strip()
+    if not stripped:
+        raise ValueError(f"{field_name} must be a non-empty decimal string")
+    try:
+        amount = Decimal(stripped)
+    except InvalidOperation:
+        raise ValueError(
+            f"{field_name} must be a valid decimal string, got {value!r}"
+        ) from None
+    if amount <= 0:
+        raise ValueError(f"{field_name} must be positive")
 
 
 def lw_tx_status(tx: str) -> dict[str, Any]:
@@ -809,6 +825,10 @@ def changelly_quote(
         Changelly's quote response: {id, result, amountFrom, amountTo,
         networkFee, min, max, expiredAt, ...}
     """
+    if (amount_from is None) == (amount_to is None):
+        raise ValueError(
+            "Provide exactly one of amount_from or amount_to — not both, not neither."
+        )
     from .changelly import LIQUID_USDT_ID, network_to_asset_id
 
     ext = network_to_asset_id(external_network)
@@ -829,11 +849,13 @@ def changelly_send(
     amount_from: str,
     wallet_name: str = "default",
     password: str | None = None,
+    rate_id: str | None = None,
 ) -> dict[str, Any]:
     """Send USDt-Liquid out via a Changelly fixed-rate swap.
 
     Flow:
-      1. Get a fixed-rate quote for `amount_from` USDt-Liquid → USDt-on-network.
+      1. Get a fixed-rate quote for `amount_from` USDt-Liquid → USDt-on-network
+         (skipped if `rate_id` supplied from a prior changelly_quote call).
       2. Create the fixed order; Changelly returns a Liquid deposit address.
       3. Broadcast the USDt-Liquid deposit from the local wallet.
 
@@ -847,17 +869,23 @@ def changelly_send(
         amount_from: USDt-Liquid to send (decimal string, e.g. "100").
         wallet_name: Liquid wallet to sign with.
         password: mnemonic decryption password (if encrypted at rest).
+        rate_id: rate id from a prior changelly_quote call. Pass this to lock
+            the previewed rate and avoid drift between quote and execution.
 
     Returns:
         order_id, deposit_hash (txid we broadcast), deposit_address,
         amount_from, amount_to, status, expires_at, track_url
     """
+    _validate_positive_decimal_string(amount_from, "amount_from")
+    if not settle_address or not settle_address.strip():
+        raise ValueError("settle_address cannot be empty")
     swap = get_changelly_manager().send_swap(
         external_network=external_network,
         amount_from=amount_from,
         settle_address=settle_address,
         wallet_name=wallet_name,
         password=password,
+        rate_id=rate_id,
     )
     return swap.to_dict()
 
@@ -866,7 +894,7 @@ def changelly_receive(
     external_network: str,
     wallet_name: str = "default",
     external_refund_address: str | None = None,
-    amount_from: str | None = None,
+    amount_from: str = "",
 ) -> dict[str, Any]:
     """Receive USDt-Liquid via a Changelly variable-rate swap.
 
@@ -882,13 +910,13 @@ def changelly_receive(
         external_refund_address: STRONGLY RECOMMENDED — the deposit-chain
             address to refund to if the order fails. Without one a stuck
             order requires manual web UI intervention.
-        amount_from: optional reference amount for the quote preview only;
-            variable orders accept any amount in [min, max].
+        amount_from: amount the external sender will deposit (decimal string,
+            e.g. "50"). Required by the Ankara backend serializer.
 
     Returns:
-        order_id, deposit_address, settle_address, amount_from (if provided),
-        status, track_url
+        order_id, deposit_address, settle_address, amount_from, status, track_url
     """
+    _validate_positive_decimal_string(amount_from, "amount_from")
     swap = get_changelly_manager().receive_swap(
         external_network=external_network,
         wallet_name=wallet_name,

@@ -28,6 +28,7 @@ from aqua.changelly import (
     ChangellySwap,
     _check_pair_allowed,
     _decimal_to_sats,
+    _validate_settle_address,
     changelly_track_url,
     network_to_asset_id,
     swap_is_failed,
@@ -201,6 +202,42 @@ class TestAllowedPairs:
         monkeypatch.setenv("CHANGELLY_ALLOW_ALL_PAIRS", value)
         with pytest.raises(ValueError, match="not in the curated allowlist"):
             _check_pair_allowed("btc", "lusdt")
+
+
+# ---------------------------------------------------------------------------
+# settle_address validation
+# ---------------------------------------------------------------------------
+
+
+class TestValidateSettleAddress:
+    @pytest.mark.parametrize("network, address", [
+        ("tron",     "T" + "X" * 33),                           # T + 33 base58 = 34
+        ("ethereum", "0xAbCdEf1234567890abcdef1234567890abCdEf12"),  # 0x + 40 hex = 42
+        ("bsc",      "0xAbCdEf1234567890abcdef1234567890abCdEf12"),
+        ("polygon",  "0xAbCdEf1234567890abcdef1234567890abCdEf12"),
+        ("solana",   "So11111111111111111111111111111111"),      # 34 base58
+        ("ton",      "EQ" + "D" * 46),                          # EQ + 46 base64url = 48
+        ("ton",      "UQ" + "D" * 46),                          # UQ + 46 base64url = 48
+    ])
+    def test_valid_addresses_pass(self, network, address):
+        _validate_settle_address(network, address)
+
+    @pytest.mark.parametrize("network, address, match", [
+        ("tron",     "",                    "empty"),
+        ("tron",     "   ",                 "empty"),
+        ("tron",     "0xAbCd1234",          "valid tron"),  # Ethereum addr on Tron
+        ("ethereum", "TXYZabc123456789012", "valid ethereum"),  # Tron addr on ETH
+        ("ethereum", "0xShort",            "valid ethereum"),
+        ("solana",   "0x1234",             "valid solana"),
+        ("ton",      "0x1234",             "valid ton"),
+    ])
+    def test_invalid_addresses_raise(self, network, address, match):
+        with pytest.raises(ValueError, match=match):
+            _validate_settle_address(network, address)
+
+    def test_unknown_network_passes_through(self):
+        # No pattern for unknown network → no crash, just no validation.
+        _validate_settle_address("unknownchain", "some_address_123")
 
 
 # ---------------------------------------------------------------------------
@@ -480,6 +517,9 @@ def manager_setup(storage):
     return mgr, wm, storage
 
 
+_TRON_ADDR = "T" + "X" * 33  # valid 34-char Tron address for tests
+
+
 class TestManagerSend:
     @patch("aqua.changelly.urllib.request.urlopen")
     def test_send_lusdt_to_usdt_tron_happy_path(self, mock_urlopen, manager_setup):
@@ -516,7 +556,7 @@ class TestManagerSend:
         swap = mgr.send_swap(
             external_network="tron",
             amount_from="100",
-            settle_address="TXrecv",
+            settle_address=_TRON_ADDR,
             wallet_name="default",
         )
         assert swap.order_id == "order_xyz"
@@ -547,7 +587,7 @@ class TestManagerSend:
             mgr.send_swap(
                 external_network="tron",
                 amount_from="100",
-                settle_address="TX",
+                settle_address=_TRON_ADDR,
                 wallet_name="ghost",
             )
 
@@ -578,7 +618,7 @@ class TestManagerSend:
             mgr.send_swap(
                 external_network="tron",
                 amount_from="100",
-                settle_address="TX",
+                settle_address=_TRON_ADDR,
                 wallet_name="default",
             )
         loaded = storage.load_changelly_swap("order_persist")
@@ -607,6 +647,7 @@ class TestManagerReceive:
             external_network="tron",
             wallet_name="default",
             external_refund_address="TXrefund",
+            amount_from="50",
         )
         assert swap.order_id == "ord_recv"
         assert swap.swap_type == "variable"
@@ -624,7 +665,7 @@ class TestManagerReceive:
     def test_receive_rejects_unknown_external_network(self, manager_setup):
         mgr, _, _ = manager_setup
         with pytest.raises(ValueError, match="Unknown network"):
-            mgr.receive_swap(external_network="avalanche", wallet_name="default")
+            mgr.receive_swap(external_network="avalanche", wallet_name="default", amount_from="50")
 
 
 class TestManagerStatus:

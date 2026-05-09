@@ -958,7 +958,8 @@ class TestChangellyReceive:
             cli,
             ["--format", "json", "changelly", "receive",
              "--external-network", "tron",
-             "--external-refund-address", "TXrefund"],
+             "--external-refund-address", "TXrefund",
+             "--amount-from", "50"],
         )
         assert result.exit_code == 0
         data = json.loads(result.output)
