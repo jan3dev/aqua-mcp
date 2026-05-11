@@ -507,10 +507,13 @@ def recommend_shift_or_swap(
 
 # SideShift returns one of these statuses (lowercase). We surface them as-is
 # but expose `is_final` and `is_success` helpers so callers don't have to
-# memorise the state machine.
-_FINAL_STATUSES = {"settled", "refunded", "expired"}
+# memorise the state machine. `"failed"` is locally minted by `send_shift`
+# when the deposit broadcast itself raises — the order exists on SideShift
+# but the wallet never funded it, so the shift is terminally dead from our
+# side and should be reported as final + failed.
+_FINAL_STATUSES = {"settled", "refunded", "expired", "failed"}
 _SUCCESS_STATUSES = {"settled"}
-_FAILED_STATUSES = {"refunded", "expired"}
+_FAILED_STATUSES = {"refunded", "expired", "failed"}
 
 
 def shift_is_final(status: str) -> bool:

@@ -91,7 +91,7 @@ class TestStatusHelpers:
         assert shift_is_final(s) is True
         assert shift_is_failed(s) is False
 
-    @pytest.mark.parametrize("s", ["refunded", "expired"])
+    @pytest.mark.parametrize("s", ["refunded", "expired", "failed"])
     def test_failed_terminal_states(self, s):
         assert shift_is_success(s) is False
         assert shift_is_final(s) is True
