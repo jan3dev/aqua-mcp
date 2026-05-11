@@ -808,6 +808,8 @@ def sideswap_server_status(network: str = "mainnet") -> dict[str, Any]:
         server_fee_percent_peg_in, server_fee_percent_peg_out,
         peg_in_wallet_balance, peg_out_wallet_balance, optional warning
     """
+    if network not in ("mainnet", "testnet"):
+        raise ValueError(f"Unknown network: {network}")
     manager = get_sideswap_peg_manager()
     return manager.get_server_status(network)
 

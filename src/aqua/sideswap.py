@@ -972,7 +972,7 @@ def map_peg_status(tx_state: Optional[str], list_empty: bool) -> str:
     if list_empty:
         return "pending"
     return {
-        "Detected": "processing",
+        "Detected": "detected",
         "Processing": "processing",
         "Done": "completed",
         "InsufficientAmount": "failed",

@@ -346,8 +346,12 @@ def swap(ctx, asset_id, asset_ticker, amount, reverse, wallet_name, skip_confirm
             raise click.ClickException(f"SideSwap quote error: {preview['error_msg']}")
         click.confirm("Proceed with this swap?", abort=True, err=True)
         recv = preview.get("recv_amount")
-        if isinstance(recv, int) and recv > 0:
-            min_recv_amount = recv
+        if not isinstance(recv, int) or recv <= 0:
+            raise click.ClickException(
+                f"SideSwap returned an invalid recv_amount in the quote preview: {recv!r}. "
+                "Refusing to proceed without a confirmed rate."
+            )
+        min_recv_amount = recv
 
     password = resolve_secret(
         "Password", password_stdin, env_var="AQUA_PASSWORD", required=False

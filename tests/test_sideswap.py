@@ -170,7 +170,7 @@ class TestMapPegStatus:
         assert map_peg_status(None, list_empty=True) == "pending"
 
     @pytest.mark.parametrize("state, expected", [
-        ("Detected", "processing"),
+        ("Detected", "detected"),
         ("Processing", "processing"),
         ("Done", "completed"),
         ("InsufficientAmount", "failed"),
@@ -542,7 +542,7 @@ class TestPegStatusPolling:
         }
         with _patch_ws():
             result = mgr.status("poll2")
-        assert result["status"] == "processing"
+        assert result["status"] == "detected"
         assert result["confirmations"] == "1/2"
 
     def test_status_multi_tx_does_not_regress_completed_state(self, manager_setup):
@@ -760,7 +760,7 @@ class TestSideSwapWSClient:
         sent, result = asyncio.run(go())
         assert result == {"min_peg_in_amount": 1286}
         assert len(sent) == 1
-        msg = __import__("json").loads(sent[0])
+        msg = _json.loads(sent[0])
         assert msg["id"] == 1
         assert msg["method"] == "server_status"
         assert msg["params"] is None
