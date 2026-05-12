@@ -2187,7 +2187,7 @@ If you have:
     return server
 
 
-async def run_server(): # pragma: no cover
+async def run_server():  # pragma: no cover
     """Run the MCP server."""
     server = create_server()
 
@@ -2200,10 +2200,10 @@ async def run_server(): # pragma: no cover
         )
 
 
-def main(): # pragma: no cover
+def main():  # pragma: no cover
     """Entry point."""
     asyncio.run(run_server())
 
 
-if __name__ == "__main__": # pragma: no cover
+if __name__ == "__main__":  # pragma: no cover
     main()
