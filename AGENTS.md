@@ -16,9 +16,9 @@ AI Assistant ←→ MCP Server (Python) ←→ LWK (Liquid) ──→ Electrum/E
 
 No local server required. Liquid uses Electrum/Esplora; Bitcoin uses Esplora only. All via Blockstream's public infrastructure.
 
-## Tools (44 total)
+## Tools (46 total)
 
-Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified tools are `unified_*`; Lightning tools are `lightning_*`; SideSwap tools are `sideswap_*`; SideShift cross-chain tools are `sideshift_*`; Changelly cross-chain USDt tools are `changelly_*`.
+Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified tools are `unified_*`; Lightning tools are `lightning_*`; SideSwap tools are `sideswap_*`; SideShift cross-chain tools are `sideshift_*`; Changelly cross-chain USDt tools are `changelly_*`; Pix → DePix tools are `pix_*`.
 
 ### Wallet Management
 
@@ -74,6 +74,14 @@ Liquid tools use the `lw_` prefix; Bitcoin tools use the `btc_` prefix; unified 
 | `lightning_send` | Pay a Lightning invoice using L-BTC via Boltz submarine swap. Fees: ~0.1% + miner fees. Limits: 100 – 25,000,000 sats | `invoice`: BOLT11 string (lnbc... or lntb...), `wallet_name`: optional, `password`: optional |
 | `lightning_transaction_status` | Check status of a Lightning swap (send or receive). For receive: auto-claims L-BTC when settled. For send: retrieves preimage when claimed. | `swap_id`: string |
 
+### Pix → DePix (Brazilian Real on-ramp)
+
+| Tool | Description | Parameters |
+|------|-------------|------------|
+| `pix_receive` | Mint a Pix charge that pays out DePix (BRL stablecoin on Liquid) to the wallet's next address. Returns Pix Copia e Cola string + hosted QR image URL. Amount is in BRL **cents** (100 = R$1.00). Requires `EULEN_API_TOKEN`. | `amount_cents`: int, `wallet_name`: optional, `password`: optional |
+| `pix_status` | Check the status of a Pix → DePix deposit. Eulen pushes DePix automatically; no claim step. | `swap_id`: string |
+
+
 ### Changelly (USDt Cross-Chain Swaps via AQUA's Ankara Proxy)
 
 Changelly is a cross-chain swap service routed through AQUA's Ankara backend proxy (`https://ankara.aquabtc.com/api/v1/changelly`). Use it for **USDt-Liquid ↔ USDt on the 6 supported external chains**: Ethereum, Tron, BSC, Solana, Polygon, TON. For BTC, L-BTC, or non-USDt swaps, use SideSwap or SideShift instead.
@@ -89,6 +97,7 @@ Changelly is a cross-chain swap service routed through AQUA's Ankara backend pro
 > ⚠️ **Changelly trust model**: Custodial. They take the USDt-Liquid deposit (or USDt on the external chain) and send the converted asset from their hot wallet. Refund address is auto-set on send (wallet's own Liquid address). On receives, strongly encourage the user to provide an external refund address — without one, a stuck order requires manual intervention via Changelly's web UI.
 
 > ⚠️ **Curated allowlist**: Mirrors AQUA Flutter's `ChangellyAssetIds` in `lib/features/changelly/models/changelly_models.dart`. Only USDt is supported. Set `CHANGELLY_ALLOW_ALL_PAIRS=1` to bypass for testing or power use.
+
 ### SideShift (Custodial Cross-Chain Swaps)
 
 SideShift.ai is a custodial cross-chain swap service that complements SideSwap (which is Liquid-only or pegs through the Liquid Federation). Use SideShift for pairs where at least one leg is on a non-Liquid chain (Ethereum, Tron, Solana, USDt-on-other-chains, etc.). The trust model is "trust SideShift the company" — they take the deposit and send the converted asset from their hot wallet — so it's not as trustless as SideSwap. Use `sideshift_recommend` to decide.
@@ -115,6 +124,7 @@ Both legs of a `sideshift_send` / `sideshift_receive` call must be in this set. 
 > ⚠️ **Memo networks**: Some networks (TON, Stellar, BNB Beacon, etc.) require a memo on the deposit. SideShift returns `depositMemo` in the order response for those. Surface it to the user clearly when present.
 
 > ⚠️ **Non-L-BTC Liquid deposits**: when `deposit_network="liquid"` and `deposit_coin != "btc"` (e.g. USDt-Liquid → USDt-Tron), `liquid_asset_id` must be passed and must be the asset's hex id, **not** the L-BTC policy asset id. Without it the wallet would default to L-BTC and silently broadcast the wrong asset to SideShift's deposit address. `sideshift_send` rejects both cases before contacting SideShift.
+
 ### SideSwap (BTC ↔ L-BTC Pegs and Liquid Asset Swaps)
 
 | Tool | Description | Parameters |
@@ -142,7 +152,7 @@ MCP resources provide static documentation to AI assistants.
 | `aqua://docs/networks` | Network Reference | Bitcoin and Liquid network details, address formats, explorers, common assets |
 | `aqua://docs/security` | Security Best Practices | Password usage, at-rest encryption, backup, watch-only wallets, recovery |
 
-## Prompts (21 total)
+## Prompts (22 total)
 
 MCP prompts provide pre-built conversation starters for common workflows.
 
@@ -162,6 +172,7 @@ MCP prompts provide pre-built conversation starters for common workflows.
 | `export_descriptor` | Export descriptor for watch-only wallet | `wallet_name`: optional |
 | `delete_wallet` | Safely delete a wallet with balance check and seed backup reminder | `wallet_name`: required |
 | `pay_lightning` | Pay a Lightning invoice using Liquid Bitcoin | `wallet_name`: optional |
+| `receive_via_pix` | Receive DePix by paying a Pix charge in your Brazilian banking app | `wallet_name`: optional |
 | `usdt_cross_chain_send` | Send USDt-Liquid out to USDt on another chain via Changelly (e.g. USDt-Liquid → USDt-Tron). Walks through quote, confirmation, and broadcast. | `wallet_name`: optional |
 | `usdt_cross_chain_receive` | Receive USDt-Liquid from USDt on another chain via Changelly. Returns deposit address for the external sender. | `wallet_name`: optional |
 | `cross_chain_send` | Send Liquid/BTC funds out to another chain via SideShift (e.g. USDt-Liquid → USDt-Tron, L-BTC → ETH). Walks through quote, confirmation, and broadcast. | `wallet_name`: optional |
@@ -185,6 +196,8 @@ Wallet data stored in `~/.aqua/`:
 │   └── {swap_id}.json   # Contains swap details + preimage when settled
 ├── lightning_swaps/     # Unified Lightning swap data (send & receive)
 │   └── {swap_id}.json   # Contains swap details + status + optional preimage
+├── pix_swaps/           # Pix → DePix deposit records (Eulen)
+│   └── {swap_id}.json   # Contains Pix charge details + status + optional blockchain_txid
 ├── changelly_swaps/     # Changelly cross-chain USDt swap orders
 │   └── {order_id}.json  # Contains direction, type, addresses, status, txid
 ├── sideshift_shifts/    # SideShift cross-chain shift orders
@@ -299,6 +312,27 @@ Or for send swaps (Boltz):
 
 File permissions: `0o600`. Status values: `pending` | `processing` | `completed` | `failed`. The `lightning_transaction_status` tool auto-claims settled receive swaps.
 
+### Pix Swap File Structure
+
+```json
+{
+  "swap_id": "eulen_deposit_uuid",
+  "amount_cents": 5000,
+  "wallet_name": "default",
+  "depix_address": "lq1qq...",
+  "qr_copy_paste": "00020126580014br.gov.bcb.pix...",
+  "qr_image_url": "https://depix.eulen.app/qr/...png",
+  "status": "pending",
+  "network": "mainnet",
+  "created_at": "2026-05-08T12:00:00Z",
+  "expiration": "2026-05-08T23:59:59Z",
+  "blockchain_txid": null,
+  "payer_name": null
+}
+```
+
+File permissions: `0o600`. Status values (raw from Eulen): `pending` | `depix_sent` | `under_review` | `canceled` | `error` | `refunded` | `expired`. There is no claim step — Eulen pushes DePix to `depix_address` automatically once the Pix payment settles.
+
 ### SideSwap Peg File Structure
 
 Stored at `~/.aqua/sideswap_pegs/{order_id}.json`:
@@ -401,6 +435,22 @@ File permissions: `0o600`. Status values: `pending` → `verified` → `signed` 
 - `coincurve` - secp256k1 for Boltz swap keypair generation
 - `websockets` - WebSocket client for SideSwap JSON-RPC (>=12.0)
 
+## Pix / Eulen Integration
+
+Eulen runs the public Pix → DePix REST API. AQUA mints a Pix charge, the user pays it in their Brazilian banking app, and Eulen credits DePix (BRL stablecoin on Liquid) to the address bound at deposit creation.
+
+**Configuration**:
+- `EULEN_API_TOKEN` (required): Bearer token. Obtain from https://depix.info/#partners.
+- `EULEN_API_URL` (optional): defaults to `https://depix.eulen.app/api`.
+
+**Endpoints used**:
+- `POST /deposit` with body `{ amountInCents, depixAddress }` → `{ id, qrCopyPaste, qrImageUrl, expiration }`. Headers: `Authorization: Bearer <token>`, `X-Nonce: <uuid4-hex>`.
+- `GET /deposit-status?id={id}` → `{ status, valueInCents, payerName?, blockchainTxID?, expiration? }`.
+
+**Amount Limits**: `amount_cents` is in BRL **cents** (100 = R$1.00). Eulen's absolute floor is R$1.00; first-time users typically have a daily limit around R$500 that scales up over time. There are no fixed published fees — verify current rates at depix.info.
+
+**Status semantics**: Eulen delivers DePix automatically; AQUA only polls. Terminal states are `depix_sent` (success), `canceled` / `error` / `refunded` / `expired` (failure).
+
 ## Ankara Integration
 
 Ankara backend (`test.aquabtc.com`) provides Lightning → L-BTC swaps (receive side).
@@ -447,6 +497,7 @@ Changelly is reached via AQUA's Ankara backend proxy at `https://ankara.aquabtc.
 **Trust model**: Custodial. Changelly takes the deposit and sends the converted asset from their hot wallet via AQUA's backend. Refund address is set automatically on send (the wallet's own Liquid address) and strongly recommended on receive (must be supplied by the caller; otherwise a stuck order needs manual web UI intervention).
 
 **Why both Changelly and SideShift?** Both are USDt cross-chain swap services and cover roughly the same chains. They're redundant on supported pairs by design. Agents can pick whichever has better rates at quote time, or fall back to the other if one is degraded or unavailable.
+
 ## SideShift Integration
 
 Technical detail for `src/aqua/sideshift.py`. Tool semantics, trust model, refund-address guidance, and memo-network warnings live in the **SideShift (Custodial Cross-Chain Swaps)** section under Tools.
@@ -476,6 +527,7 @@ Technical detail for `src/aqua/sideshift.py`. Tool semantics, trust model, refun
 **Status state machine** (lowercase): `waiting` → `pending` → `processing` → `settling` → `settled` (success). Failure paths: `refund` → `refunding` → `refunded`, or `expired`. Helpers: `shift_is_final`, `shift_is_success`, `shift_is_failed`.
 
 **Deposit chain limitation**: We can only sign on Bitcoin and Liquid, so `sideshift_send` requires `deposit_network ∈ {bitcoin, liquid}`. For receives, only `settle_network ∈ {bitcoin, liquid}` (we hold addresses there). For everything else, the user provides an external address.
+
 ## SideSwap Integration
 
 SideSwap (`sideswap.io`) provides BTC ↔ L-BTC pegs and Liquid asset swaps via WebSocket JSON-RPC.
@@ -673,6 +725,7 @@ agentic-aqua/
 │       ├── lightning.py # Lightning abstraction layer (unified send/receive manager)
 │       ├── boltz.py    # Boltz Exchange integration (submarine swaps, send)
 │       ├── ankara.py   # Ankara backend integration (Lightning receive)
+│       ├── pix.py      # Pix → DePix integration (Eulen API)
 │       ├── sideshift.py # SideShift.ai integration (custodial cross-chain swaps)
 │       ├── sideswap.py # SideSwap WS+HTTP client, peg manager, swap quoting
 │       ├── assets.py   # Asset registry
@@ -697,6 +750,7 @@ agentic-aqua/
     ├── test_bitcoin.py
     ├── test_boltz.py
     ├── test_ankara.py
+    ├── test_pix.py
     ├── test_changelly.py
     ├── test_cli.py
     ├── test_sideshift.py
@@ -737,4 +791,4 @@ Use standard Grep/Glob only for: exact string matches, simple file lookups, conf
 
 ---
 
-*Last updated: 2026-03-17*
+*Last updated: 2026-05-08*
