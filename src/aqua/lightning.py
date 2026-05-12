@@ -16,6 +16,7 @@ from .boltz import (
     decode_bolt11_amount_sats,
     generate_keypair,
 )
+from .lnurl import is_lightning_address, resolve_lightning_address
 
 # Boltz API status string -> local lifecycle status (pending | processing | completed | failed)
 _BOLTZ_STATUS_MAP = {
@@ -149,23 +150,51 @@ class LightningManager:
         invoice: str,
         wallet_name: str = "default",
         password: Optional[str] = None,
+        amount_sats: Optional[int] = None,
     ) -> LightningSwap:
         """
-        Pay a Lightning invoice using L-BTC via Boltz submarine swap.
+        Pay a Lightning invoice or Lightning Address using L-BTC via Boltz submarine swap.
 
         Args:
-            invoice: BOLT11 Lightning invoice (lnbc... or lntb...)
+            invoice: BOLT11 Lightning invoice (lnbc.../lntb...) OR Lightning Address (user@domain)
             wallet_name: Liquid wallet to pay from
             password: Password to decrypt mnemonic (if encrypted at rest)
+            amount_sats: Amount in sats. Required when `invoice` is a Lightning Address;
+                ignored for BOLT11 if it matches the invoice amount, error if it differs.
 
         Returns:
             LightningSwap with pending status and lockup_txid
         """
+        from_lightning_address = False
+        if is_lightning_address(invoice):
+            if amount_sats is None:
+                raise ValueError(
+                    "amount_sats is required when paying a Lightning Address"
+                )
+            if amount_sats < BOLTZ_MIN_SATS or amount_sats > BOLTZ_MAX_SATS:
+                raise ValueError(
+                    f"amount_sats {amount_sats} outside Boltz limits "
+                    f"({BOLTZ_MIN_SATS}-{BOLTZ_MAX_SATS} sats)"
+                )
+            invoice = resolve_lightning_address(invoice, amount_sats)
+            from_lightning_address = True
+
         valid_prefixes = ("lnbc", "lntb")
         if not invoice or not any(invoice.startswith(p) for p in valid_prefixes):
             raise ValueError(
-                "Invalid invoice: must be a BOLT11 Lightning invoice starting with 'lnbc' (mainnet) or 'lntb' (testnet)"
+                "Invalid invoice: must be a BOLT11 Lightning invoice starting with 'lnbc' (mainnet) or 'lntb' (testnet) or a Lightning Address (user@domain)"
             )
+
+        if amount_sats is not None:
+            decoded = decode_bolt11_amount_sats(invoice)
+            if from_lightning_address and decoded is None:
+                raise ValueError(
+                    f"Lightning Address resolved to a zero-amount invoice (expected {amount_sats} sats)"
+                )
+            if decoded is not None and decoded != amount_sats:
+                raise ValueError(
+                    f"amount_sats ({amount_sats}) does not match BOLT11 invoice amount ({decoded})"
+                )
 
         wallet_data = self.storage.load_wallet(wallet_name)
         if not wallet_data:
