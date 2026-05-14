@@ -3,7 +3,7 @@
 import re
 import tempfile
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import lwk
 import pytest
@@ -496,3 +496,110 @@ class TestDescriptorHelpers:
         """Returns all-None dict for non-xpub descriptor strings."""
         meta = _extract_xpub_metadata("wpkh(privkey-format/0/*)")
         assert meta == {"xpub": None, "fingerprint": None, "derivation_path": None}
+
+
+class TestEsploraFallback:
+    """Verify _with_client_fallback iterates Esplora clients on transient failures."""
+
+    def test_fallback_uses_second_when_first_raises_transient(self, isolated_managers):
+        _, btc_manager = isolated_managers
+        c1 = MagicMock()
+        c1.full_scan.side_effect = Exception("connection reset")
+        c2 = MagicMock()
+        c2.full_scan.return_value = "ok"
+        btc_manager._clients["mainnet"] = [c1, c2]
+
+        with patch("aqua.bitcoin.time.sleep"):
+            result = btc_manager._with_client_fallback(
+                "mainnet", lambda c: c.full_scan("req", 20, 3)
+            )
+
+        assert result == "ok"
+        assert c1.full_scan.call_count >= 1
+        c2.full_scan.assert_called_once()
+
+    def test_fallback_does_not_swallow_non_transient_but_still_tries_next(
+        self, isolated_managers
+    ):
+        """Non-transient on first client should NOT retry that client, but still falls
+        through to the next (matches _with_client_fallback's per-client try/except)."""
+        _, btc_manager = isolated_managers
+        c1 = MagicMock()
+        c1.broadcast.side_effect = ValueError("bad request")
+        c2 = MagicMock()
+        c2.broadcast.return_value = "ok"
+        btc_manager._clients["mainnet"] = [c1, c2]
+
+        result = btc_manager._with_client_fallback("mainnet", lambda c: c.broadcast("tx"))
+
+        assert result == "ok"
+        # Non-transient → only one attempt on c1 (no retry)
+        c1.broadcast.assert_called_once()
+        c2.broadcast.assert_called_once()
+
+    def test_fallback_raises_last_exception_when_all_fail(self, isolated_managers):
+        _, btc_manager = isolated_managers
+        c1 = MagicMock()
+        c1.full_scan.side_effect = Exception("timed out on c1")
+        c2 = MagicMock()
+        c2.full_scan.side_effect = Exception("timed out on c2")
+        btc_manager._clients["mainnet"] = [c1, c2]
+
+        with patch("aqua.bitcoin.time.sleep"):
+            with pytest.raises(Exception, match="timed out on c2"):
+                btc_manager._with_client_fallback(
+                    "mainnet", lambda c: c.full_scan("req", 20, 3)
+                )
+
+        assert c1.full_scan.call_count >= 1
+        assert c2.full_scan.call_count >= 1
+
+    def test_send_broadcast_falls_back_to_second_explorer(self, isolated_managers):
+        """End-to-end: when first Esplora's broadcast fails, send() retries on the
+        second and still returns the txid."""
+        manager, btc_manager = isolated_managers
+        manager.import_mnemonic(TEST_MNEMONIC, "w", "mainnet")
+        btc_manager.create_wallet(TEST_MNEMONIC, "w", "mainnet")
+
+        # Wire two mock clients before send() touches the network.
+        c1 = MagicMock()
+        c1.broadcast.side_effect = Exception("connection reset")
+        c2 = MagicMock()
+        c2.broadcast.return_value = None
+        btc_manager._clients["mainnet"] = [c1, c2]
+
+        # Fake tx: .compute_txid().serialize() → bytes; send() reverses + hexes them.
+        fake_txid_bytes = bytes.fromhex("aa" * 32)
+        fake_tx = MagicMock()
+        fake_tx.compute_txid.return_value.serialize.return_value = fake_txid_bytes
+
+        fake_psbt = MagicMock()
+        fake_psbt.extract_tx.return_value = fake_tx
+
+        fake_wallet = MagicMock()
+        fake_wallet.sign.return_value = True
+
+        fake_builder = MagicMock()
+        fake_builder.add_recipient.return_value = fake_builder
+        fake_builder.fee_rate.return_value = fake_builder
+        fake_builder.finish.return_value = fake_psbt
+
+        with patch.object(btc_manager, "sync_wallet"), \
+             patch.object(
+                 btc_manager,
+                 "_get_wallet_with_signer",
+                 return_value=(fake_wallet, "mainnet"),
+             ), \
+             patch("aqua.bitcoin.bdk.TxBuilder", return_value=fake_builder), \
+             patch("aqua.bitcoin.bdk.Address"), \
+             patch("aqua.bitcoin.bdk.Amount"), \
+             patch("aqua.bitcoin.time.sleep"):
+            txid = btc_manager.send(
+                wallet_name="w",
+                address="bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+                amount=10_000,
+            )
+
+        assert txid == fake_txid_bytes[::-1].hex()
+        c1.broadcast.assert_called()
+        c2.broadcast.assert_called_once()
