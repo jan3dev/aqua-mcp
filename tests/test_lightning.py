@@ -1089,12 +1089,10 @@ class TestLightningTools:
             )
 
     def test_lightning_send_tool_ln_address_requires_amount_sats(self):
-        """lightning_send delegates LN-address-without-amount validation to the manager."""
+        """lightning_send delegates LN-address-without-amount validation to the real manager."""
+        real_manager = get_lightning_manager()
         with patch("aqua.tools.get_lightning_manager") as mock_get:
-            mock_manager = MagicMock()
-            mock_manager.pay_invoice.side_effect = ValueError(
-                "amount_sats is required when paying a Lightning Address"
-            )
+            mock_manager = MagicMock(wraps=real_manager)
             mock_get.return_value = mock_manager
 
             with pytest.raises(
